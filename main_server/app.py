@@ -15,7 +15,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from shared import (
-    setup_logger, create_simple_model, compile_model, 
+    setup_logger, create_federated_model, compile_model, 
     get_model_weights, set_model_weights, average_weights,
     MAIN_SERVER_HOST, MAIN_SERVER_PORT, NUM_ROUNDS, NUM_HOSPITALS,
     LEARNING_RATE
@@ -40,7 +40,7 @@ def initialize_global_model():
     """Initialize the global model"""
     global global_model
     logger.info("Initializing global model...")
-    global_model = create_simple_model()
+    global_model = create_federated_model()
     global_model = compile_model(global_model, learning_rate=LEARNING_RATE)
     logger.info("Global model initialized successfully")
 

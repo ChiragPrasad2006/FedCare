@@ -15,7 +15,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from shared import (
-    setup_logger, create_simple_model, compile_model,
+    setup_logger, create_federated_model, compile_model,
     get_model_weights, set_model_weights,
     MAIN_SERVER_HOST, MAIN_SERVER_PORT, EPOCHS_PER_ROUND,
     BATCH_SIZE, LEARNING_RATE
@@ -40,7 +40,7 @@ def initialize_local_model():
     """Initialize the local model"""
     global local_model
     logger.info("Initializing local model...")
-    local_model = create_simple_model()
+    local_model = create_federated_model()
     local_model = compile_model(local_model, learning_rate=LEARNING_RATE)
     logger.info("Local model initialized successfully")
 
