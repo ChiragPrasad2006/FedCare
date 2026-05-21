@@ -98,6 +98,13 @@ HOSPITAL_PORT=5003 python hospital_server/app.py
 python orchestrator.py
 ```
 
+4. Open the dashboards
+```text
+Main server:      http://localhost:5000/
+Hospital server:  http://localhost:5001/
+Hospital server:  http://localhost:5002/
+```
+
 ### Option 2: Run with Docker Compose
 
 ```bash
@@ -114,38 +121,44 @@ python orchestrator.py
 ### Option 3: Deploy to Kubernetes
 
 ```bash
-# Build images
-docker build -t fedcare-main-server:latest -f docker/Dockerfile.main_server .
-docker build -t fedcare-hospital-server:latest -f docker/Dockerfile.hospital_server .
-
-# Deploy
-kubectl apply -f kubernetes/deployment.yml
-
-# Check status
-kubectl get pods -n fedcare
-kubectl logs -n fedcare deployment/main-server
+# Follow the full local Kubernetes guide
+# docs/LOCAL_KUBERNETES_DEPLOYMENT.md
 ```
+
+Recommended for college demos:
+
+- run Kubernetes locally with `Minikube` or `Docker Desktop`
+- use your own machine's CPU and RAM instead of paid cloud compute
+- expose dashboards with `kubectl port-forward`
 
 ## API Endpoints
 
 ### Main Server
 
 - `GET /health` - Health check
+- `GET /` - Main dashboard UI
 - `POST /initialize` - Initialize federated learning
 - `GET /get_global_model` - Get current global model
 - `POST /submit_update` - Receive hospital updates
 - `POST /aggregate` - Trigger aggregation
 - `GET /metrics` - Get training metrics
+- `GET /dashboard_data` - Dashboard data feed
 - `GET /status` - Get current status
 - `POST /reset` - Reset system
 
 ### Hospital Server
 
 - `GET /health` - Health check
+- `GET /` - Hospital dashboard UI
 - `POST /configure` - Configure hospital
 - `POST /load_data` - Load local training data
+- `POST /load_demo_training_data` - Generate demo training data
+- `POST /upload_patient_records` - Upload patient records for anonymization preview
+- `POST /generate_demo_records` - Generate demo patient records
+- `GET /patient_records` - Retrieve raw or anonymized patient records
 - `POST /sync_and_train` - Fetch model and train
 - `GET /training_history` - Get training history
+- `GET /dashboard_data` - Dashboard data feed
 - `GET /status` - Get hospital status
 
 ## Usage Examples
@@ -265,6 +278,32 @@ hospital_data = create_non_iid_data(
 - Only model weights are transmitted
 - Communication can be encrypted (future enhancement)
 - Differential privacy support (future enhancement)
+
+## Presentation Dashboards
+
+FedCare now includes built-in dashboards for presentations and demos:
+
+- hospital-side patient record upload and anonymization preview
+- local training controls and history
+- main-server privacy removal summary
+- federated training status and accuracy
+
+## Google Cloud Hosting
+
+For a presentation-friendly deployment with `1` main server and `2` hospital servers on Google Cloud, see:
+
+- `docs/GOOGLE_CLOUD_DEPLOYMENT.md`
+
+Important:
+
+- Google Cloud usually still requires a billing account and payment method, even when a service has a free tier
+- TensorFlow-based services can exceed free limits, so local Kubernetes is the safer no-cost option for student projects
+
+## Local Kubernetes Hosting
+
+For the recommended no-cloud-cost setup with `1` main server and `2` hospital servers on your own machine, see:
+
+- `docs/LOCAL_KUBERNETES_DEPLOYMENT.md`
 
 ## Monitoring and Logging
 

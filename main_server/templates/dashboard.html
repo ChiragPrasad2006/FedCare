@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>FedCare Main Server</title>
+    <style>
+        :root {
+            --bg: #f3f0ea;
+            --surface: rgba(255, 255, 255, 0.82);
+            --text: #1f2d3d;
+            --muted: #5d6b7a;
+            --accent: #174ea6;
+            --accent-2: #11806a;
+            --accent-3: #d96d35;
+            --line: rgba(31, 45, 61, 0.1);
+            --shadow: 0 26px 70px rgba(20, 36, 58, 0.12);
+            --radius: 26px;
+        }
+
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            color: var(--text);
+            font-family: "Segoe UI", "Trebuchet MS", sans-serif;
+            background:
+                radial-gradient(circle at 5% 10%, rgba(23, 78, 166, 0.18), transparent 28%),
+                radial-gradient(circle at 95% 10%, rgba(17, 128, 106, 0.16), transparent 24%),
+                linear-gradient(180deg, #f9f7f1 0%, #edf3f8 100%);
+        }
+
+        .shell {
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 30px 20px 48px;
+        }
+
+        .panel {
+            background: var(--surface);
+            backdrop-filter: blur(20px);
+            border-radius: var(--radius);
+            border: 1px solid var(--line);
+            box-shadow: var(--shadow);
+            padding: 24px;
+        }
+
+        .hero {
+            display: grid;
+            grid-template-columns: 1.4fr 1fr;
+            gap: 18px;
+            margin-bottom: 18px;
+        }
+
+        .hero h1 {
+            margin: 0 0 12px;
+            font-size: clamp(2.2rem, 4.4vw, 4.4rem);
+            line-height: 0.94;
+            letter-spacing: -0.05em;
+        }
+
+        .eyebrow, .muted {
+            color: var(--muted);
+        }
+
+        .metric-grid, .summary-grid {
+            display: grid;
+            gap: 12px;
+        }
+
+        .metric-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            margin-top: 18px;
+        }
+
+        .summary-grid {
+            grid-template-columns: 1.1fr 0.9fr;
+        }
+
+        .metric {
+            border-radius: 18px;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.72);
+            border: 1px solid rgba(31, 45, 61, 0.08);
+        }
+
+        .metric strong {
+            display: block;
+            font-size: 1.65rem;
+            margin-top: 8px;
+        }
+
+        button {
+            border: none;
+            border-radius: 999px;
+            padding: 12px 18px;
+            font-weight: 700;
+            cursor: pointer;
+            color: white;
+            background: linear-gradient(135deg, var(--accent), #133a7a);
+        }
+
+        button.alt {
+            background: linear-gradient(135deg, var(--accent-3), #ba5120);
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 18px;
+        }
+
+        .card-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .badge {
+            padding: 8px 12px;
+            border-radius: 999px;
+            font-size: 0.9rem;
+            font-weight: 700;
+            background: rgba(17, 128, 106, 0.12);
+            color: var(--accent-2);
+        }
+
+        .stack {
+            display: grid;
+            gap: 18px;
+        }
+
+        .info-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .info-list div {
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(31, 45, 61, 0.08);
+        }
+
+        .hospital-list {
+            display: grid;
+            gap: 12px;
+        }
+
+        .hospital-card {
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.7);
+            border: 1px solid rgba(31, 45, 61, 0.08);
+            padding: 16px;
+        }
+
+        .hospital-card h4 {
+            margin: 0 0 8px;
+        }
+
+        .table-wrap {
+            overflow: auto;
+            border-radius: 18px;
+            border: 1px solid var(--line);
+            background: rgba(255, 255, 255, 0.78);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 720px;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 12px 14px;
+            border-bottom: 1px solid rgba(31, 45, 61, 0.08);
+            vertical-align: top;
+        }
+
+        th {
+            color: var(--muted);
+            font-size: 0.82rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .message {
+            margin-top: 14px;
+            padding: 12px 14px;
+            border-radius: 16px;
+            background: rgba(23, 78, 166, 0.08);
+            color: var(--accent);
+            display: none;
+        }
+
+        @media (max-width: 960px) {
+            .hero, .summary-grid, .metric-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="shell">
+        <section class="hero">
+            <div class="panel">
+                <div class="eyebrow">FedCare Control Plane</div>
+                <h1>Main server view for federated learning and privacy assurance.</h1>
+                <p class="muted">
+                    Track training rounds, hospital participation, and how effectively each hospital removes patient identifiers before sharing any presentation-safe summaries.
+                </p>
+                <div class="actions">
+                    <button id="initializeBtn">Initialize System</button>
+                    <button class="alt" id="aggregateBtn">Aggregate Updates</button>
+                    <button id="refreshBtn">Refresh Dashboard</button>
+                    <button class="alt" id="resetBtn">Reset</button>
+                </div>
+                <div class="metric-grid">
+                    <div class="metric"><span>Round</span><strong id="roundValue">0</strong></div>
+                    <div class="metric"><span>Latest Accuracy</span><strong id="accuracyValue">0%</strong></div>
+                    <div class="metric"><span>Privacy Removal</span><strong id="privacyValue">0%</strong></div>
+                    <div class="metric"><span>Hospitals Connected</span><strong id="hospitalValue">0</strong></div>
+                </div>
+            </div>
+            <div class="panel">
+                <div class="card-title">
+                    <div>
+                        <div class="eyebrow">Leadership Snapshot</div>
+                        <h3 style="margin:6px 0 0;">Why this architecture matters</h3>
+                    </div>
+                    <span class="badge">Privacy-first FL</span>
+                </div>
+                <div class="info-list" id="leadershipInfo"></div>
+                <div id="messageBox" class="message"></div>
+            </div>
+        </section>
+
+        <section class="summary-grid">
+            <div class="stack">
+                <div class="panel">
+                    <div class="card-title">
+                        <div>
+                            <div class="eyebrow">Hospital Privacy Reports</div>
+                            <h3 style="margin:6px 0 0;">Anonymization quality by hospital</h3>
+                        </div>
+                        <span class="badge" id="hospitalBadge">No submissions yet</span>
+                    </div>
+                    <div class="hospital-list" id="hospitalList"></div>
+                </div>
+                <div class="panel">
+                    <div class="card-title">
+                        <div>
+                            <div class="eyebrow">Training Feed</div>
+                            <h3 style="margin:6px 0 0;">Recent learning updates</h3>
+                        </div>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Round</th>
+                                    <th>Hospital</th>
+                                    <th>Accuracy</th>
+                                    <th>Loss</th>
+                                    <th>Timestamp</th>
+                                </tr>
+                            </thead>
+                            <tbody id="metricTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stack">
+                <div class="panel">
+                    <div class="card-title">
+                        <div>
+                            <div class="eyebrow">Federated State</div>
+                            <h3 style="margin:6px 0 0;">Operational summary</h3>
+                        </div>
+                    </div>
+                    <div class="info-list" id="statusInfo"></div>
+                </div>
+                <div class="panel">
+                    <div class="card-title">
+                        <div>
+                            <div class="eyebrow">Privacy Assurance</div>
+                            <h3 style="margin:6px 0 0;">Central compliance indicators</h3>
+                        </div>
+                    </div>
+                    <div class="info-list" id="privacyInfo"></div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        const els = {
+            roundValue: document.getElementById('roundValue'),
+            accuracyValue: document.getElementById('accuracyValue'),
+            privacyValue: document.getElementById('privacyValue'),
+            hospitalValue: document.getElementById('hospitalValue'),
+            leadershipInfo: document.getElementById('leadershipInfo'),
+            hospitalList: document.getElementById('hospitalList'),
+            hospitalBadge: document.getElementById('hospitalBadge'),
+            metricTableBody: document.getElementById('metricTableBody'),
+            statusInfo: document.getElementById('statusInfo'),
+            privacyInfo: document.getElementById('privacyInfo'),
+            messageBox: document.getElementById('messageBox')
+        };
+
+        function showMessage(text, isError = false) {
+            els.messageBox.textContent = text;
+            els.messageBox.style.display = 'block';
+            els.messageBox.style.background = isError ? 'rgba(180, 30, 30, 0.12)' : 'rgba(23, 78, 166, 0.08)';
+            els.messageBox.style.color = isError ? '#8e1f1f' : '#174ea6';
+        }
+
+        async function callApi(path, method = 'GET', body) {
+            const response = await fetch(path, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: body ? JSON.stringify(body) : undefined
+            });
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload.error || 'Request failed');
+            }
+            return payload;
+        }
+
+        function renderPairs(target, pairs) {
+            target.innerHTML = pairs.map(([label, value]) => `
+                <div><span class="muted">${label}</span><strong>${value}</strong></div>
+            `).join('');
+        }
+
+        function renderHospitals(reports) {
+            els.hospitalBadge.textContent = reports.length ? `${reports.length} hospitals reporting` : 'No submissions yet';
+            els.hospitalList.innerHTML = reports.length ? reports.map((report) => `
+                <div class="hospital-card">
+                    <h4>${report.hospital_id}</h4>
+                    <div class="info-list">
+                        <div><span class="muted">Removal accuracy</span><strong>${report.privacy_summary?.removal_accuracy ?? 0}%</strong></div>
+                        <div><span class="muted">Records processed</span><strong>${report.privacy_summary?.total_records ?? 0}</strong></div>
+                        <div><span class="muted">Residual risks</span><strong>${report.privacy_summary?.residual_risk_items ?? 0}</strong></div>
+                        <div><span class="muted">Last sync</span><strong>${report.timestamp || 'N/A'}</strong></div>
+                    </div>
+                </div>
+            `).join('') : '<div class="hospital-card">Hospital privacy summaries will appear here after records are uploaded from the edge dashboards.</div>';
+        }
+
+        function renderMetrics(metrics) {
+            els.metricTableBody.innerHTML = metrics.length ? metrics.map((metric) => `
+                <tr>
+                    <td>${metric.round}</td>
+                    <td>${metric.hospital_id}</td>
+                    <td>${metric.metrics?.accuracy !== undefined ? `${(metric.metrics.accuracy * 100).toFixed(2)}%` : 'N/A'}</td>
+                    <td>${metric.metrics?.loss !== undefined ? metric.metrics.loss.toFixed(4) : 'N/A'}</td>
+                    <td>${metric.timestamp || '-'}</td>
+                </tr>
+            `).join('') : '<tr><td colspan="5">Training metrics will populate after hospital nodes run a round.</td></tr>';
+        }
+
+        async function refreshDashboard() {
+            const data = await callApi('/dashboard_data');
+            const { federated_status, training_summary, privacy_summary, hospital_privacy_reports, training_metrics } = data;
+            els.roundValue.textContent = federated_status.current_round;
+            els.accuracyValue.textContent = `${training_summary.latest_round_accuracy}%`;
+            els.privacyValue.textContent = `${privacy_summary.overall_removal_accuracy}%`;
+            els.hospitalValue.textContent = privacy_summary.connected_hospitals;
+
+            renderPairs(els.leadershipInfo, [
+                ['Patient data movement', 'Raw records stay at the hospital'],
+                ['Shared upstream', 'Model weights and anonymized summaries only'],
+                ['Pending updates', federated_status.pending_hospital_updates],
+                ['Latest average loss', training_summary.latest_round_loss]
+            ]);
+            renderPairs(els.statusInfo, [
+                ['Model initialized', federated_status.model_initialized ? 'Yes' : 'No'],
+                ['Current round', federated_status.current_round],
+                ['Pending hospital updates', federated_status.pending_hospital_updates],
+                ['Hospitals reporting this round', federated_status.total_hospitals_reporting],
+                ['Dashboard refreshed', federated_status.timestamp]
+            ]);
+            renderPairs(els.privacyInfo, [
+                ['Overall removal accuracy', `${privacy_summary.overall_removal_accuracy}%`],
+                ['Total records processed', privacy_summary.total_records_processed],
+                ['Detected PII items', privacy_summary.total_detected_pii],
+                ['Residual risks remaining', privacy_summary.total_residual_risk],
+                ['Connected hospitals', privacy_summary.connected_hospitals]
+            ]);
+
+            renderHospitals(hospital_privacy_reports || []);
+            renderMetrics(training_metrics || []);
+        }
+
+        document.getElementById('initializeBtn').addEventListener('click', async () => {
+            try {
+                const payload = await callApi('/initialize', 'POST', {});
+                showMessage(payload.message);
+                await refreshDashboard();
+            } catch (error) {
+                showMessage(error.message, true);
+            }
+        });
+
+        document.getElementById('aggregateBtn').addEventListener('click', async () => {
+            try {
+                const payload = await callApi('/aggregate', 'POST', { trigger_next_round: true });
+                showMessage(`Aggregation completed. Current round: ${payload.round}`);
+                await refreshDashboard();
+            } catch (error) {
+                showMessage(error.message, true);
+            }
+        });
+
+        document.getElementById('resetBtn').addEventListener('click', async () => {
+            try {
+                const payload = await callApi('/reset', 'POST', {});
+                showMessage(payload.message);
+                await refreshDashboard();
+            } catch (error) {
+                showMessage(error.message, true);
+            }
+        });
+
+        document.getElementById('refreshBtn').addEventListener('click', refreshDashboard);
+        refreshDashboard().catch((error) => showMessage(error.message, true));
+    </script>
+</body>
+</html>

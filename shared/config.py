@@ -9,6 +9,7 @@ load_dotenv()
 # Server Configuration
 MAIN_SERVER_HOST = os.getenv("MAIN_SERVER_HOST", "localhost")
 MAIN_SERVER_PORT = int(os.getenv("MAIN_SERVER_PORT", 5000))
+MAIN_SERVER_URL = os.getenv("MAIN_SERVER_URL", "").strip()
 HOSPITAL_SERVER_PORT = int(os.getenv("HOSPITAL_SERVER_PORT", 5001))
 
 # Federated Learning Configuration

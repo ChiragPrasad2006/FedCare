@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>FedCare Hospital Node</title>
+    <style>
+        :root {
+            --bg: #f4efe7;
+            --surface: rgba(255, 255, 255, 0.82);
+            --surface-strong: #ffffff;
+            --text: #17313a;
+            --muted: #56727b;
+            --accent: #0f7b6c;
+            --accent-2: #df6b3d;
+            --line: rgba(23, 49, 58, 0.12);
+            --shadow: 0 24px 70px rgba(18, 45, 52, 0.12);
+            --radius: 24px;
+        }
+
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "Segoe UI", "Trebuchet MS", sans-serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at top left, rgba(15, 123, 108, 0.2), transparent 32%),
+                radial-gradient(circle at top right, rgba(223, 107, 61, 0.14), transparent 24%),
+                linear-gradient(180deg, #f8f3ea 0%, #eef4f5 100%);
+        }
+
+        .shell {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 32px 20px 48px;
+        }
+
+        .hero {
+            display: grid;
+            grid-template-columns: 1.5fr 1fr;
+            gap: 18px;
+            margin-bottom: 20px;
+        }
+
+        .panel {
+            background: var(--surface);
+            backdrop-filter: blur(18px);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 24px;
+        }
+
+        .hero h1 {
+            margin: 0 0 10px;
+            font-size: clamp(2rem, 4vw, 3.8rem);
+            line-height: 0.94;
+            letter-spacing: -0.04em;
+        }
+
+        .eyebrow, .muted {
+            color: var(--muted);
+        }
+
+        .status-strip {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+            margin-top: 18px;
+        }
+
+        .metric {
+            background: rgba(255, 255, 255, 0.68);
+            border-radius: 18px;
+            padding: 16px;
+            border: 1px solid rgba(23, 49, 58, 0.08);
+        }
+
+        .metric strong {
+            display: block;
+            font-size: 1.5rem;
+            margin-top: 6px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 18px;
+        }
+
+        .stack {
+            display: grid;
+            gap: 18px;
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 18px;
+        }
+
+        button {
+            border: none;
+            border-radius: 999px;
+            padding: 12px 18px;
+            font-weight: 600;
+            cursor: pointer;
+            color: white;
+            background: linear-gradient(135deg, var(--accent), #095a4f);
+        }
+
+        button.secondary {
+            background: linear-gradient(135deg, var(--accent-2), #c24f25);
+        }
+
+        input, textarea {
+            width: 100%;
+            border-radius: 18px;
+            border: 1px solid var(--line);
+            padding: 14px 16px;
+            font: inherit;
+            background: rgba(255, 255, 255, 0.92);
+            color: var(--text);
+        }
+
+        textarea {
+            min-height: 180px;
+            resize: vertical;
+        }
+
+        .card-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .badge {
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: rgba(15, 123, 108, 0.12);
+            color: var(--accent);
+            font-size: 0.9rem;
+            font-weight: 700;
+        }
+
+        .table-wrap {
+            overflow: auto;
+            border-radius: 18px;
+            border: 1px solid var(--line);
+            background: rgba(255, 255, 255, 0.78);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 720px;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 12px 14px;
+            border-bottom: 1px solid rgba(23, 49, 58, 0.08);
+            vertical-align: top;
+        }
+
+        th {
+            font-size: 0.82rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--muted);
+        }
+
+        .message {
+            margin-top: 14px;
+            padding: 12px 14px;
+            border-radius: 16px;
+            background: rgba(15, 123, 108, 0.09);
+            color: var(--accent);
+            display: none;
+        }
+
+        .info-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .info-list div {
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(23, 49, 58, 0.08);
+        }
+
+        @media (max-width: 960px) {
+            .hero, .grid, .status-strip {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="shell">
+        <section class="hero">
+            <div class="panel">
+                <div class="eyebrow">FedCare Edge Node</div>
+                <h1>Hospital privacy dashboard for secure local training.</h1>
+                <p class="muted">
+                    Configure a hospital node, load demo patient records, anonymize locally, and train on-site before sending only model updates to the main server.
+                </p>
+                <div class="actions">
+                    <button id="configureBtn">Configure Hospital</button>
+                    <button class="secondary" id="demoRecordsBtn">Generate Demo Records</button>
+                    <button id="demoTrainingBtn">Load Demo Training Data</button>
+                    <button class="secondary" id="syncBtn">Sync and Train</button>
+                </div>
+                <div class="status-strip">
+                    <div class="metric"><span>Hospital ID</span><strong id="hospitalId">{{ default_hospital_id }}</strong></div>
+                    <div class="metric"><span>Current Round</span><strong id="roundValue">0</strong></div>
+                    <div class="metric"><span>Removal Accuracy</span><strong id="privacyAccuracy">0%</strong></div>
+                    <div class="metric"><span>Local Records</span><strong id="recordCount">0</strong></div>
+                </div>
+            </div>
+            <div class="panel">
+                <div class="card-title">
+                    <div>
+                        <div class="eyebrow">Node Controls</div>
+                        <h3 style="margin:6px 0 0;">Presentation setup</h3>
+                    </div>
+                    <span class="badge">Main: {{ main_server_url }}</span>
+                </div>
+                <label for="hospitalInput">Hospital identifier</label>
+                <input id="hospitalInput" value="{{ default_hospital_id }}">
+                <div style="height:12px;"></div>
+                <label for="recordInput">Paste patient records as JSON array</label>
+                <textarea id="recordInput">[
+  {
+    "patient_id": "HOSP-1001",
+    "name": "Jane Miller",
+    "date_of_birth": "1987-04-16",
+    "email": "jane.miller@example.com",
+    "phone": "555-0101",
+    "address": "145 Health Ave",
+    "department": "Cardiology",
+    "condition": "Hypertension",
+    "risk_score": 0.74,
+    "notes": "Follow-up requested for jane.miller@example.com"
+  }
+]</textarea>
+                <div class="actions">
+                    <button id="uploadRecordsBtn">Upload Patient Records</button>
+                    <button class="secondary" id="refreshBtn">Refresh Dashboard</button>
+                </div>
+                <div id="messageBox" class="message"></div>
+            </div>
+        </section>
+
+        <section class="grid">
+            <div class="stack">
+                <div class="panel">
+                    <div class="card-title">
+                        <div>
+                            <div class="eyebrow">Anonymized Records</div>
+                            <h3 style="margin:6px 0 0;">Safe preview for presentations</h3>
+                        </div>
+                        <span class="badge" id="previewBadge">0 records</span>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Patient ID</th>
+                                    <th>Department</th>
+                                    <th>Condition</th>
+                                    <th>Status</th>
+                                    <th>Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recordTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="panel">
+                    <div class="card-title">
+                        <div>
+                            <div class="eyebrow">Training Progress</div>
+                            <h3 style="margin:6px 0 0;">Local model performance</h3>
+                        </div>
+                        <span class="badge" id="trainingBadge">Awaiting data</span>
+                    </div>
+                    <div class="info-list" id="trainingInfo"></div>
+                </div>
+            </div>
+
+            <div class="stack">
+                <div class="panel">
+                    <div class="card-title">
+                        <div>
+                            <div class="eyebrow">Privacy Signals</div>
+                            <h3 style="margin:6px 0 0;">PII removal effectiveness</h3>
+                        </div>
+                    </div>
+                    <div class="info-list" id="privacyInfo"></div>
+                </div>
+                <div class="panel">
+                    <div class="card-title">
+                        <div>
+                            <div class="eyebrow">Node Summary</div>
+                            <h3 style="margin:6px 0 0;">Operational status</h3>
+                        </div>
+                    </div>
+                    <div class="info-list" id="statusInfo"></div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        const els = {
+            hospitalInput: document.getElementById('hospitalInput'),
+            hospitalId: document.getElementById('hospitalId'),
+            roundValue: document.getElementById('roundValue'),
+            privacyAccuracy: document.getElementById('privacyAccuracy'),
+            recordCount: document.getElementById('recordCount'),
+            recordInput: document.getElementById('recordInput'),
+            recordTableBody: document.getElementById('recordTableBody'),
+            previewBadge: document.getElementById('previewBadge'),
+            privacyInfo: document.getElementById('privacyInfo'),
+            trainingInfo: document.getElementById('trainingInfo'),
+            statusInfo: document.getElementById('statusInfo'),
+            trainingBadge: document.getElementById('trainingBadge'),
+            messageBox: document.getElementById('messageBox')
+        };
+
+        function showMessage(text, isError = false) {
+            els.messageBox.textContent = text;
+            els.messageBox.style.display = 'block';
+            els.messageBox.style.background = isError ? 'rgba(200, 60, 60, 0.12)' : 'rgba(15, 123, 108, 0.09)';
+            els.messageBox.style.color = isError ? '#9a1f1f' : '#0f7b6c';
+        }
+
+        async function callApi(path, method = 'GET', body) {
+            const response = await fetch(path, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: body ? JSON.stringify(body) : undefined
+            });
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload.error || 'Request failed');
+            }
+            return payload;
+        }
+
+        function renderPairs(target, pairs) {
+            target.innerHTML = pairs.map(([label, value]) => `
+                <div><span class="muted">${label}</span><strong>${value}</strong></div>
+            `).join('');
+        }
+
+        function renderRecords(records) {
+            els.previewBadge.textContent = `${records.length} records`;
+            els.recordTableBody.innerHTML = records.length ? records.map((record) => `
+                <tr>
+                    <td>${record.patient_id || '-'}</td>
+                    <td>${record.department || '-'}</td>
+                    <td>${record.condition || '-'}</td>
+                    <td>${record.status || '-'}</td>
+                    <td>${record.notes || '-'}</td>
+                </tr>
+            `).join('') : '<tr><td colspan="5">No records uploaded yet.</td></tr>';
+        }
+
+        async function refreshDashboard() {
+            const data = await callApi('/dashboard_data');
+            const { status, training, privacy, records } = data;
+            els.hospitalId.textContent = data.hospital_id || 'Not configured';
+            els.roundValue.textContent = status.current_round;
+            els.privacyAccuracy.textContent = `${privacy.removal_accuracy}%`;
+            els.recordCount.textContent = records.raw_count;
+            els.trainingBadge.textContent = training.has_training_data ? 'Training data ready' : 'Awaiting data';
+
+            renderRecords(records.preview || []);
+            renderPairs(els.privacyInfo, [
+                ['Detected PII items', privacy.detected_pii_items],
+                ['Redacted items', privacy.redacted_items],
+                ['Residual risks', privacy.residual_risk_items],
+                ['Processed records', privacy.total_records],
+                ['Last processed', privacy.processed_at || 'Not yet processed']
+            ]);
+            renderPairs(els.trainingInfo, [
+                ['Rounds completed', training.rounds_completed],
+                ['Latest accuracy', training.latest_metrics?.accuracy !== undefined ? `${(training.latest_metrics.accuracy * 100).toFixed(2)}%` : 'N/A'],
+                ['Latest loss', training.latest_metrics?.loss !== undefined ? training.latest_metrics.loss.toFixed(4) : 'N/A'],
+                ['Average accuracy', `${(training.avg_accuracy * 100).toFixed(2)}%`],
+                ['Training data present', training.has_training_data ? 'Yes' : 'No']
+            ]);
+            renderPairs(els.statusInfo, [
+                ['Model initialized', status.model_initialized ? 'Yes' : 'No'],
+                ['Hospital configured', data.hospital_id ? 'Yes' : 'No'],
+                ['Current round', status.current_round],
+                ['Training rounds logged', status.num_training_rounds],
+                ['Main server', data.main_server_url]
+            ]);
+        }
+
+        document.getElementById('configureBtn').addEventListener('click', async () => {
+            try {
+                const payload = await callApi('/configure', 'POST', { hospital_id: els.hospitalInput.value.trim() || 'hospital_1' });
+                showMessage(payload.message);
+                await refreshDashboard();
+            } catch (error) {
+                showMessage(error.message, true);
+            }
+        });
+
+        document.getElementById('uploadRecordsBtn').addEventListener('click', async () => {
+            try {
+                const records = JSON.parse(els.recordInput.value);
+                const payload = await callApi('/upload_patient_records', 'POST', { records });
+                showMessage(`${payload.message}. Removal accuracy: ${payload.privacy.removal_accuracy}%`);
+                await refreshDashboard();
+            } catch (error) {
+                showMessage(error.message, true);
+            }
+        });
+
+        document.getElementById('demoRecordsBtn').addEventListener('click', async () => {
+            try {
+                const payload = await callApi('/generate_demo_records', 'POST', { count: 8 });
+                showMessage(`${payload.message}. ${payload.count} records prepared.`);
+                await refreshDashboard();
+            } catch (error) {
+                showMessage(error.message, true);
+            }
+        });
+
+        document.getElementById('demoTrainingBtn').addEventListener('click', async () => {
+            try {
+                const payload = await callApi('/load_demo_training_data', 'POST', { count: 240 });
+                showMessage(`${payload.message}. Samples: ${payload.num_samples}`);
+                await refreshDashboard();
+            } catch (error) {
+                showMessage(error.message, true);
+            }
+        });
+
+        document.getElementById('syncBtn').addEventListener('click', async () => {
+            try {
+                const round = Number(els.roundValue.textContent || '0');
+                const payload = await callApi('/sync_and_train', 'POST', { round });
+                showMessage(`Training completed for round ${payload.round}. Accuracy: ${(payload.metrics.accuracy * 100).toFixed(2)}%`);
+                await refreshDashboard();
+            } catch (error) {
+                showMessage(error.message, true);
+            }
+        });
+
+        document.getElementById('refreshBtn').addEventListener('click', refreshDashboard);
+        refreshDashboard().catch((error) => showMessage(error.message, true));
+    </script>
+</body>
+</html>

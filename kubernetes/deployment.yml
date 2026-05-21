@@ -26,7 +26,7 @@ spec:
       containers:
       - name: main-server
         image: fedcare-main-server:latest
-        imagePullPolicy: Never
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 5000
           name: http
@@ -36,9 +36,9 @@ spec:
         - name: MAIN_SERVER_PORT
           value: "5000"
         - name: NUM_ROUNDS
-          value: "10"
+          value: "5"
         - name: NUM_HOSPITALS
-          value: "3"
+          value: "2"
         - name: LOG_LEVEL
           value: "INFO"
         resources:
@@ -52,13 +52,13 @@ spec:
           httpGet:
             path: /health
             port: 5000
-          initialDelaySeconds: 10
+          initialDelaySeconds: 20
           periodSeconds: 30
         readinessProbe:
           httpGet:
             path: /health
             port: 5000
-          initialDelaySeconds: 5
+          initialDelaySeconds: 10
           periodSeconds: 10
 
 ---
@@ -83,26 +83,26 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: hospital-server
+  name: hospital-server-1
   namespace: fedcare
   labels:
-    app: hospital-server
+    app: hospital-server-1
     tier: edge
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
-      app: hospital-server
+      app: hospital-server-1
   template:
     metadata:
       labels:
-        app: hospital-server
+        app: hospital-server-1
         tier: edge
     spec:
       containers:
       - name: hospital-server
         image: fedcare-hospital-server:latest
-        imagePullPolicy: Never
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 5001
           name: http
@@ -113,6 +113,8 @@ spec:
           value: "main-server"
         - name: MAIN_SERVER_PORT
           value: "5000"
+        - name: MAIN_SERVER_URL
+          value: "http://main-server:5000"
         - name: LOG_LEVEL
           value: "INFO"
         resources:
@@ -126,23 +128,23 @@ spec:
           httpGet:
             path: /health
             port: 5001
-          initialDelaySeconds: 10
+          initialDelaySeconds: 20
           periodSeconds: 30
         readinessProbe:
           httpGet:
             path: /health
             port: 5001
-          initialDelaySeconds: 5
+          initialDelaySeconds: 10
           periodSeconds: 10
 
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: hospital-server
+  name: hospital-server-1
   namespace: fedcare
   labels:
-    app: hospital-server
+    app: hospital-server-1
 spec:
   type: ClusterIP
   ports:
@@ -151,4 +153,80 @@ spec:
     protocol: TCP
     name: http
   selector:
-    app: hospital-server
+    app: hospital-server-1
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hospital-server-2
+  namespace: fedcare
+  labels:
+    app: hospital-server-2
+    tier: edge
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hospital-server-2
+  template:
+    metadata:
+      labels:
+        app: hospital-server-2
+        tier: edge
+    spec:
+      containers:
+      - name: hospital-server
+        image: fedcare-hospital-server:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5001
+          name: http
+        env:
+        - name: HOSPITAL_PORT
+          value: "5001"
+        - name: MAIN_SERVER_HOST
+          value: "main-server"
+        - name: MAIN_SERVER_PORT
+          value: "5000"
+        - name: MAIN_SERVER_URL
+          value: "http://main-server:5000"
+        - name: LOG_LEVEL
+          value: "INFO"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5001
+          initialDelaySeconds: 20
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5001
+          initialDelaySeconds: 10
+          periodSeconds: 10
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hospital-server-2
+  namespace: fedcare
+  labels:
+    app: hospital-server-2
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5001
+    targetPort: 5001
+    protocol: TCP
+    name: http
+  selector:
+    app: hospital-server-2
