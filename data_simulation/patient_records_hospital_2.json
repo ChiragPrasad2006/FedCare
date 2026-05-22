@@ -1,0 +1,26 @@
+[
+  {
+    "patient_id": "HOSP2-2001",
+    "name": "Aisha Khan",
+    "date_of_birth": "1992-02-03",
+    "email": "aisha.khan@example.com",
+    "phone": "555-1101",
+    "address": "77 River Street",
+    "department": "Oncology",
+    "condition": "Routine Screening",
+    "risk_score": 0.28,
+    "notes": "Email aisha.khan@example.com after lab review"
+  },
+  {
+    "patient_id": "HOSP2-2002",
+    "name": "Daniel Reed",
+    "date_of_birth": "1968-06-14",
+    "email": "daniel.reed@example.com",
+    "phone": "555-1102",
+    "address": "220 West Grove",
+    "department": "Pulmonology",
+    "condition": "Asthma",
+    "risk_score": 0.63,
+    "notes": "Call patient directly at 555-1102 before discharge"
+  }
+]

@@ -1,475 +1,331 @@
 """
-Hospital Server (Edge) - Trains model on local data
+Hospital Server - local MNIST training plus simple upload-and-route workflow.
 """
-import os
-import requests
-import numpy as np
-from datetime import datetime
-from flask import Flask, request, jsonify, render_template
-from flask_cors import CORS
-import sys
+from __future__ import annotations
 
-# Add parent directory to path
+import csv
+import io
+import json
+import os
+import sys
+from datetime import datetime
+
+import requests
+from flask import Flask, jsonify, render_template, request
+from flask_cors import CORS
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from shared import (
-    setup_logger, create_federated_model, compile_model,
-    get_model_weights, set_model_weights,
-    MAIN_SERVER_HOST, MAIN_SERVER_PORT, EPOCHS_PER_ROUND,
-    BATCH_SIZE, LEARNING_RATE, MAIN_SERVER_URL
+    BATCH_SIZE,
+    EPOCHS_PER_ROUND,
+    HOSPITAL_ID,
+    HOSPITAL_SERVER_PORT,
+    LEARNING_RATE,
+    MAIN_SERVER_HOST,
+    MAIN_SERVER_PORT,
+    MAIN_SERVER_URL,
+    NUM_HOSPITALS,
+    compile_model,
+    create_federated_model,
+    get_model_weights,
+    set_model_weights,
+    setup_logger,
 )
-from shared.privacy import analyze_and_anonymize_records, generate_demo_patient_records
-from data_simulation.data_generator import generate_synthetic_patient_data
+from shared.mnist_data import get_hospital_mnist_split
 
-# Initialize Flask app
+
 app = Flask(__name__)
 CORS(app)
-
-# Setup logging
 logger = setup_logger("hospital_server")
 
-# Global variables
-hospital_id = None
+hospital_id = HOSPITAL_ID or "hospital_1"
 local_model = None
 current_round = 0
 training_history = []
 local_data = None
-patient_records = []
-anonymized_patient_records = []
-privacy_snapshot = {
-    'total_records': 0,
-    'detected_pii_items': 0,
-    'redacted_items': 0,
-    'residual_risk_items': 0,
-    'removal_accuracy': 100.0,
-    'processed_at': None,
-}
+local_data_summary = {}
+last_submission = None
+received_processed_batches = []
 
 
-def initialize_local_model():
-    """Initialize the local model"""
-    global local_model
-    logger.info("Initializing local model...")
-    local_model = create_federated_model()
-    local_model = compile_model(local_model, learning_rate=LEARNING_RATE)
-    logger.info("Local model initialized successfully")
+def now_iso():
+    return datetime.utcnow().isoformat() + "Z"
 
 
 def get_main_server_base_url():
-    """Resolve the main server base URL for local and cloud deployments."""
     if MAIN_SERVER_URL:
-        return MAIN_SERVER_URL.rstrip('/')
+        return MAIN_SERVER_URL.rstrip("/")
     return f"http://{MAIN_SERVER_HOST}:{MAIN_SERVER_PORT}"
 
 
-def summarize_training():
-    """Build a concise training summary for the dashboard."""
-    latest_metrics = training_history[-1]['metrics'] if training_history else {}
-    avg_accuracy = (
-        round(sum(item['metrics'].get('accuracy', 0) for item in training_history) / len(training_history), 4)
-        if training_history else 0.0
+def initialize_local_model():
+    global local_model
+    local_model = create_federated_model()
+    local_model = compile_model(local_model, learning_rate=LEARNING_RATE)
+
+
+def load_hospital_mnist_data(sample_count: int = 1200):
+    global local_data, local_data_summary
+    images, labels, summary = get_hospital_mnist_split(
+        hospital_id=hospital_id,
+        num_hospitals=NUM_HOSPITALS,
+        sample_count=sample_count,
     )
-    return {
-        'latest_metrics': latest_metrics,
-        'avg_accuracy': avg_accuracy,
-        'rounds_completed': len(training_history),
-        'has_training_data': local_data is not None and len(local_data[0]) > 0,
-    }
+    local_data = (images, labels)
+    local_data_summary = summary
 
 
-def publish_privacy_summary():
-    """Send privacy snapshot and anonymized preview to the main server."""
-    if not hospital_id:
-        return False
-
-    payload = {
-        'hospital_id': hospital_id,
-        'privacy_summary': privacy_snapshot,
-        'sample_records': anonymized_patient_records[:5],
-        'hospital_profile': {
-            'hospital_id': hospital_id,
-            'records_uploaded': len(patient_records),
-            'training_rounds': len(training_history),
-            'latest_sync': datetime.now().isoformat(),
-        },
-    }
-
+def register_with_main_server():
     try:
-        url = f"{get_main_server_base_url()}/submit_privacy_summary"
-        response = requests.post(url, json=payload, timeout=15)
-        return response.status_code == 200
+        requests.post(
+            f"{get_main_server_base_url()}/register_hospital",
+            json={
+                "hospital_id": hospital_id,
+                "server_url": f"http://{hospital_id}:{HOSPITAL_SERVER_PORT}",
+            },
+            timeout=10,
+        )
     except Exception as exc:
-        logger.warning(f"Unable to publish privacy summary to main server: {exc}")
-        return False
+        logger.warning("Unable to register hospital with main server: %s", exc)
+
+
+def bootstrap_hospital():
+    initialize_local_model()
+    load_hospital_mnist_data()
+    register_with_main_server()
 
 
 def fetch_global_model():
-    """Fetch global model from main server"""
-    global local_model
-    
     try:
-        url = f"{get_main_server_base_url()}/get_global_model"
-        response = requests.get(url, timeout=30)
-        
-        if response.status_code == 200:
-            data = response.json()
-            
-            from shared.communication import ServerCommunicator
-            comm = ServerCommunicator()
-            weights = comm.receive_model_weights(data['weights'])
-            
-            if weights is not None:
-                set_model_weights(local_model, weights)
-                logger.info(f"Successfully fetched and applied global model for round {data['round']}")
-                return True
-        else:
-            logger.error(f"Failed to fetch global model: {response.status_code}")
+        response = requests.get(f"{get_main_server_base_url()}/get_global_model", timeout=30)
+        if response.status_code != 200:
             return False
-            
-    except Exception as e:
-        logger.error(f"Error fetching global model: {e}")
+
+        from shared.communication import ServerCommunicator
+
+        payload = response.json()
+        weights = ServerCommunicator().receive_model_weights(payload["weights"])
+        if weights is None:
+            return False
+        set_model_weights(local_model, weights)
+        return True
+    except Exception as exc:
+        logger.error("Error fetching global model: %s", exc)
         return False
 
 
 def train_on_local_data():
-    """Train model on local data"""
-    global local_model, current_round, training_history
-    
-    if local_model is None:
-        logger.error("Local model not initialized")
+    global training_history
+    if local_model is None or local_data is None:
         return None
-    
-    if local_data is None or len(local_data) == 0:
-        logger.warning("No local data available for training")
-        return None
-    
-    try:
-        logger.info(f"Starting local training for round {current_round}")
-        
-        # Unpack data
-        X_train, y_train = local_data
-        
-        # Train model
-        history = local_model.fit(
-            X_train, y_train,
-            epochs=EPOCHS_PER_ROUND,
-            batch_size=BATCH_SIZE,
-            verbose=0
-        )
-        
-        # Extract metrics
-        final_loss = history.history['loss'][-1]
-        final_accuracy = history.history['accuracy'][-1]
-        
-        metrics = {
-            'loss': float(final_loss),
-            'accuracy': float(final_accuracy),
-            'epochs': EPOCHS_PER_ROUND,
-            'samples': len(X_train)
-        }
-        
-        training_history.append({
-            'round': current_round,
-            'metrics': metrics,
-            'timestamp': datetime.now().isoformat()
-        })
-        
-        logger.info(f"Local training completed - Loss: {final_loss:.4f}, Accuracy: {final_accuracy:.4f}")
-        
-        return metrics
-        
-    except Exception as e:
-        logger.error(f"Error during local training: {e}")
-        return None
+
+    images, labels = local_data
+    history = local_model.fit(
+        images,
+        labels,
+        epochs=EPOCHS_PER_ROUND,
+        batch_size=BATCH_SIZE,
+        verbose=0,
+    )
+    metrics = {
+        "loss": float(history.history["loss"][-1]),
+        "accuracy": float(history.history["accuracy"][-1]),
+        "epochs": EPOCHS_PER_ROUND,
+        "samples": len(images),
+    }
+    training_history.append({"round": current_round, "metrics": metrics, "timestamp": now_iso()})
+    return metrics
 
 
 def submit_update():
-    """Submit trained model update to main server"""
-    global local_model, current_round, hospital_id
-    
-    if local_model is None:
-        logger.error("Local model not trained")
-        return False
-    
     try:
-        url = f"{get_main_server_base_url()}/submit_update"
-        
-        weights = get_model_weights(local_model)
-        
-        from shared.communication import ServerCommunicator
-        comm = ServerCommunicator()
-        
-        import pickle
         import base64
-        weights_bytes = pickle.dumps(weights)
-        weights_b64 = base64.b64encode(weights_bytes).decode('utf-8')
-        
-        # Get latest metrics
-        metrics = {}
-        if training_history:
-            metrics = training_history[-1]['metrics']
-        
+        import pickle
+
+        weights_b64 = base64.b64encode(pickle.dumps(get_model_weights(local_model))).decode("utf-8")
         payload = {
-            'hospital_id': hospital_id,
-            'weights': weights_b64,
-            'metrics': metrics,
-            'round': current_round
+            "hospital_id": hospital_id,
+            "weights": weights_b64,
+            "metrics": training_history[-1]["metrics"] if training_history else {},
+            "round": current_round,
         }
-        
-        response = requests.post(url, json=payload, timeout=30)
-        
-        if response.status_code == 200:
-            logger.info(f"Successfully submitted update to main server")
-            return True
-        else:
-            logger.error(f"Failed to submit update: {response.status_code}")
-            return False
-            
-    except Exception as e:
-        logger.error(f"Error submitting update: {e}")
+        response = requests.post(f"{get_main_server_base_url()}/submit_update", json=payload, timeout=30)
+        return response.status_code == 200
+    except Exception as exc:
+        logger.error("Error submitting update: %s", exc)
         return False
 
 
-@app.route('/health', methods=['GET'])
-def health_check():
-    """Health check endpoint"""
-    return jsonify({
-        'status': 'healthy',
-        'hospital_id': hospital_id,
-        'current_round': current_round,
-        'timestamp': datetime.now().isoformat()
-    }), 200
+def sync_processed_inbox():
+    global received_processed_batches
+    try:
+        response = requests.get(
+            f"{get_main_server_base_url()}/processed_records/{hospital_id}?consume=true",
+            timeout=15,
+        )
+        if response.status_code != 200:
+            return {"batch_count": 0, "record_count": 0, "batches": []}
+        payload = response.json()
+        batches = payload.get("batches", [])
+        if batches:
+            received_processed_batches.extend(batches)
+        return payload
+    except Exception as exc:
+        logger.warning("Unable to sync processed inbox: %s", exc)
+        return {"batch_count": 0, "record_count": 0, "batches": []}
 
 
-@app.route('/', methods=['GET'])
+def fetch_active_hospitals():
+    register_with_main_server()
+    try:
+        response = requests.get(
+            f"{get_main_server_base_url()}/hospital_directory?exclude={hospital_id}",
+            timeout=10,
+        )
+        if response.status_code == 200:
+            return response.json().get("hospitals", [])
+    except Exception as exc:
+        logger.warning("Unable to fetch active hospitals: %s", exc)
+    return []
+
+
+def parse_uploaded_records():
+    if request.files.get("records_file"):
+        upload = request.files["records_file"]
+        content = upload.read().decode("utf-8")
+        if upload.filename.lower().endswith(".json"):
+            payload = json.loads(content)
+            return payload["records"] if isinstance(payload, dict) and "records" in payload else payload
+        if upload.filename.lower().endswith(".csv"):
+            reader = csv.DictReader(io.StringIO(content))
+            return list(reader)
+        raise ValueError("Only .json and .csv files are supported")
+
+    data = request.get_json() or {}
+    records = data.get("records", data if isinstance(data, list) else [])
+    return records
+
+
+@app.route("/", methods=["GET"])
 def dashboard():
-    """Serve hospital dashboard UI."""
     return render_template(
-        'dashboard.html',
-        default_hospital_id=hospital_id or 'hospital_1',
+        "dashboard.html",
+        default_hospital_id=hospital_id,
         main_server_url=get_main_server_base_url(),
     )
 
 
-@app.route('/configure', methods=['POST'])
+@app.route("/health", methods=["GET"])
+def health_check():
+    return jsonify(
+        {
+            "status": "healthy",
+            "hospital_id": hospital_id,
+            "mnist_loaded": local_data_summary.get("sample_count", 0) > 0,
+            "timestamp": now_iso(),
+        }
+    ), 200
+
+
+@app.route("/configure", methods=["POST"])
 def configure():
-    """Configure hospital server"""
-    global hospital_id
-    
-    try:
-        data = request.get_json()
-        hospital_id = data.get('hospital_id', 'hospital_1')
-        
-        logger.info(f"Hospital configured with ID: {hospital_id}")
-        
-        initialize_local_model()
-        
-        return jsonify({
-            'message': 'Hospital configured successfully',
-            'hospital_id': hospital_id
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Configuration error: {e}")
-        return jsonify({'error': str(e)}), 500
+    global hospital_id, current_round, training_history, last_submission, received_processed_batches
+    data = request.get_json() or {}
+    hospital_id = (data.get("hospital_id") or hospital_id or "hospital_1").strip()
+    current_round = 0
+    training_history.clear()
+    last_submission = None
+    received_processed_batches = []
+    bootstrap_hospital()
+    return jsonify({"message": "Hospital configured", "hospital_id": hospital_id, "timestamp": now_iso()}), 200
 
 
-@app.route('/load_data', methods=['POST'])
-def load_data():
-    """Load local training data"""
-    global local_data
-    
-    try:
-        data = request.get_json()
-        
-        # Expect data as lists (will be converted to numpy arrays)
-        X_train = np.array(data.get('X_train', []))
-        y_train = np.array(data.get('y_train', []))
-        
-        if len(X_train) == 0:
-            return jsonify({'error': 'No training data provided'}), 400
-        
-        local_data = (X_train, y_train)
-        
-        logger.info(f"Loaded local data: {len(X_train)} samples")
-        
-        return jsonify({
-            'message': 'Data loaded successfully',
-            'num_samples': len(X_train)
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error loading data: {e}")
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/sync_and_train', methods=['POST'])
-def sync_and_train():
-    """Fetch global model and train on local data"""
-    global current_round
-    
-    try:
-        data = request.get_json() or {}
-        current_round = data.get('round', current_round)
-        
-        logger.info(f"Starting sync and train for round {current_round}")
-        
-        # Fetch global model
-        if not fetch_global_model():
-            return jsonify({'error': 'Failed to fetch global model'}), 500
-        
-        # Train on local data
-        metrics = train_on_local_data()
-        if metrics is None:
-            return jsonify({'error': 'Training failed'}), 500
-        
-        # Submit update
-        if not submit_update():
-            return jsonify({'error': 'Failed to submit update'}), 500
-
-        publish_privacy_summary()
-        
-        return jsonify({
-            'message': 'Sync and train completed successfully',
-            'round': current_round,
-            'metrics': metrics,
-            'hospital_id': hospital_id,
-            'timestamp': datetime.now().isoformat()
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error in sync_and_train: {e}")
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/training_history', methods=['GET'])
-def get_training_history():
-    """Get training history"""
-    return jsonify({
-        'hospital_id': hospital_id,
-        'history': training_history,
-        'timestamp': datetime.now().isoformat()
-    }), 200
-
-
-@app.route('/status', methods=['GET'])
-def get_status():
-    """Get current hospital status"""
-    return jsonify({
-        'hospital_id': hospital_id,
-        'current_round': current_round,
-        'model_initialized': local_model is not None,
-        'has_data': local_data is not None and len(local_data[0]) > 0,
-        'num_training_rounds': len(training_history),
-        'timestamp': datetime.now().isoformat()
-    }), 200
-
-
-@app.route('/dashboard_data', methods=['GET'])
-def get_dashboard_data():
-    """Provide combined dashboard data for the hospital UI."""
-    return jsonify({
-        'hospital_id': hospital_id,
-        'status': {
-            'current_round': current_round,
-            'model_initialized': local_model is not None,
-            'has_data': local_data is not None and len(local_data[0]) > 0,
-            'num_training_rounds': len(training_history),
-            'timestamp': datetime.now().isoformat(),
-        },
-        'training': summarize_training(),
-        'privacy': privacy_snapshot,
-        'records': {
-            'raw_count': len(patient_records),
-            'anonymized_count': len(anonymized_patient_records),
-            'preview': anonymized_patient_records[:6],
-        },
-        'main_server_url': get_main_server_base_url(),
-    }), 200
-
-
-@app.route('/patient_records', methods=['GET'])
-def get_patient_records():
-    """Retrieve uploaded patient records for the dashboard."""
-    view = request.args.get('view', 'anonymized')
-    limit = max(1, min(int(request.args.get('limit', 20)), 100))
-    dataset = patient_records if view == 'raw' else anonymized_patient_records
-    return jsonify({
-        'hospital_id': hospital_id,
-        'view': view,
-        'count': len(dataset),
-        'records': dataset[:limit],
-        'privacy': privacy_snapshot,
-    }), 200
-
-
-@app.route('/upload_patient_records', methods=['POST'])
+@app.route("/upload_patient_records", methods=["POST"])
 def upload_patient_records():
-    """Upload patient records for presentation and privacy analysis."""
-    global patient_records, anonymized_patient_records, privacy_snapshot
-
+    global last_submission
     try:
-        data = request.get_json() or {}
-        records = data.get('records', data if isinstance(data, list) else [])
+        destination_hospital_id = (
+            request.form.get("destination_hospital_id")
+            if request.files
+            else (request.get_json() or {}).get("destination_hospital_id", "")
+        ).strip()
+        records = parse_uploaded_records()
 
+        if not destination_hospital_id:
+            return jsonify({"error": "destination_hospital_id is required"}), 400
         if not isinstance(records, list) or not records:
-            return jsonify({'error': 'Provide a non-empty list of patient records'}), 400
+            return jsonify({"error": "Provide a non-empty JSON or CSV upload"}), 400
 
-        patient_records = records
-        anonymized_patient_records, privacy_snapshot = analyze_and_anonymize_records(records)
-        publish_privacy_summary()
+        register_with_main_server()
+        response = requests.post(
+            f"{get_main_server_base_url()}/submit_patient_records",
+            json={
+                "source_hospital_id": hospital_id,
+                "destination_hospital_id": destination_hospital_id,
+                "records": records,
+            },
+            timeout=30,
+        )
+        payload = response.json()
+        if response.status_code != 200:
+            return jsonify({"error": payload.get("error", "Upload failed")}), response.status_code
 
-        return jsonify({
-            'message': 'Patient records uploaded successfully',
-            'privacy': privacy_snapshot,
-            'preview': anonymized_patient_records[:5],
-        }), 200
+        last_submission = {
+            "destination_hospital_id": destination_hospital_id,
+            "record_count": payload.get("record_count", 0),
+            "privacy_summary": payload.get("privacy_summary", {}),
+            "preview": payload.get("preview", []),
+            "timestamp": payload.get("timestamp", now_iso()),
+        }
+        return jsonify({"message": payload["message"], "submission": last_submission}), 200
     except Exception as exc:
-        logger.error(f"Error uploading patient records: {exc}")
-        return jsonify({'error': str(exc)}), 500
+        logger.error("Error uploading patient records: %s", exc)
+        return jsonify({"error": str(exc)}), 500
 
 
-@app.route('/generate_demo_records', methods=['POST'])
-def generate_demo_records():
-    """Generate presentation-friendly demo records."""
-    global patient_records, anonymized_patient_records, privacy_snapshot
-
-    data = request.get_json() or {}
-    count = max(3, min(int(data.get('count', 8)), 20))
-    generated_records = generate_demo_patient_records(hospital_id or 'hospital', count=count)
-    patient_records = generated_records
-    anonymized_patient_records, privacy_snapshot = analyze_and_anonymize_records(generated_records)
-    publish_privacy_summary()
-
-    return jsonify({
-        'message': 'Demo patient records generated',
-        'count': len(patient_records),
-        'privacy': privacy_snapshot,
-        'preview': anonymized_patient_records[:5],
-    }), 200
+@app.route("/sync_and_train", methods=["POST"])
+def sync_and_train():
+    global current_round
+    if not fetch_global_model():
+        return jsonify({"error": "Failed to fetch global model"}), 500
+    metrics = train_on_local_data()
+    if metrics is None:
+        return jsonify({"error": "Training failed"}), 500
+    if not submit_update():
+        return jsonify({"error": "Failed to submit update"}), 500
+    current_round += 1
+    return jsonify({"message": "Training completed", "metrics": metrics, "round": current_round}), 200
 
 
-@app.route('/load_demo_training_data', methods=['POST'])
-def load_demo_training_data():
-    """Generate lightweight training data for demos."""
-    global local_data
+@app.route("/dashboard_data", methods=["GET"])
+def get_dashboard_data():
+    sync_payload = sync_processed_inbox()
+    active_hospitals = fetch_active_hospitals()
+    return jsonify(
+        {
+            "hospital_id": hospital_id,
+            "mnist": {
+                "loaded": local_data_summary.get("sample_count", 0) > 0,
+                "sample_count": local_data_summary.get("sample_count", 0),
+                "label_distribution": local_data_summary.get("label_distribution", {}),
+            },
+            "active_hospitals": active_hospitals,
+            "last_submission": last_submission,
+            "received": {
+                "new_batch_count": sync_payload.get("batch_count", 0),
+                "new_record_count": sync_payload.get("record_count", 0),
+                "history": received_processed_batches[-12:],
+            },
+            "training": training_history[-6:],
+            "main_server_url": get_main_server_base_url(),
+            "timestamp": now_iso(),
+        }
+    ), 200
 
-    data = request.get_json() or {}
-    sample_count = max(120, min(int(data.get('count', 240)), 1000))
-    X_train, y_train = generate_synthetic_patient_data(num_samples=sample_count)
-    local_data = (X_train.reshape(-1, 28, 28, 1), y_train)
 
-    return jsonify({
-        'message': 'Demo training data generated',
-        'num_samples': len(local_data[0]),
-        'shape': list(local_data[0].shape),
-    }), 200
-
-
-if __name__ == '__main__':
-    # Get port from environment or use default
-    port = int(os.getenv('PORT', os.getenv('HOSPITAL_PORT', 5001)))
-    
-    logger.info(f"Starting Hospital Server on localhost:{port}")
-    initialize_local_model()
-    app.run(host='0.0.0.0', port=port, debug=False)
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", str(HOSPITAL_SERVER_PORT)))
+    logger.info("Starting Hospital Server on 0.0.0.0:%s", port)
+    bootstrap_hospital()
+    app.run(host="0.0.0.0", port=port, debug=False)

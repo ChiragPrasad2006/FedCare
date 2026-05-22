@@ -1,0 +1,26 @@
+[
+  {
+    "patient_id": "HOSP1-1001",
+    "name": "[REDACTED_NAME]",
+    "date_of_birth": "[REDACTED_DOB]",
+    "email": "[REDACTED_EMAIL]",
+    "phone": "***-***-0101",
+    "address": "[REDACTED_ADDRESS]",
+    "department": "Cardiology",
+    "condition": "Hypertension",
+    "risk_score": 0.74,
+    "notes": "Follow-up requested for [REDACTED]"
+  },
+  {
+    "patient_id": "HOSP1-1002",
+    "name": "[REDACTED_NAME]",
+    "date_of_birth": "[REDACTED_DOB]",
+    "email": "[REDACTED_EMAIL]",
+    "phone": "***-***-0102",
+    "address": "[REDACTED_ADDRESS]",
+    "department": "Neurology",
+    "condition": "Migraine",
+    "risk_score": 0.41,
+    "notes": "Contact spouse at [REDACTED] if symptoms worsen"
+  }
+]
