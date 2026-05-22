@@ -46,15 +46,15 @@ timeout /t 2 /nobreak
 
 REM Start hospital servers
 echo Starting Hospital Server 1 on port 5001...
-start "FedCare Hospital 1" cmd /c "set HOSPITAL_PORT=5001 && python hospital_server/app.py"
+start "FedCare Hospital 1" cmd /c "set HOSPITAL_ID=hospital_1 && set PORT=5001 && python hospital_server/app.py"
 echo.
 
 echo Starting Hospital Server 2 on port 5002...
-start "FedCare Hospital 2" cmd /c "set HOSPITAL_PORT=5002 && python hospital_server/app.py"
+start "FedCare Hospital 2" cmd /c "set HOSPITAL_ID=hospital_2 && set PORT=5002 && python hospital_server/app.py"
 echo.
 
 echo Starting Hospital Server 3 on port 5003...
-start "FedCare Hospital 3" cmd /c "set HOSPITAL_PORT=5003 && python hospital_server/app.py"
+start "FedCare Hospital 3" cmd /c "set HOSPITAL_ID=hospital_3 && set PORT=5003 && python hospital_server/app.py"
 echo.
 
 echo ========================================

@@ -1,0 +1,6 @@
+patient_id,name,date_of_birth,email,phone,address,department,condition,risk_score,notes,mnist_sample_id,mnist_digit_label,mnist_source
+MNIST-H4-6001,Lucas Brooks,1987-01-25,lucas.brooks@example.com,555-6001,18 Summit Road,Radiology,Routine Screening,0.27,"MNIST-derived metadata included for demo traceability.",166,4,MNIST train split
+MNIST-H4-6002,Ava Kim,1979-06-09,ava.kim@example.com,555-6002,307 Orchard Close,Cardiology,Hypertension,0.73,"Send discharge summary to ava.kim@example.com.",174,1,MNIST train split
+MNIST-H4-6003,Noah Ali,1983-03-12,noah.ali@example.com,555-6003,56 River Walk,General Medicine,Asthma,0.44,"Family contact requested through primary phone.",188,8,MNIST train split
+MNIST-H4-6004,Mia Patel,1992-11-18,mia.patel@example.com,555-6004,602 Terrace Park,Oncology,Routine Screening,0.34,"Screening complete, waiting on specialist sign-off.",205,1,MNIST train split
+MNIST-H4-6005,Ethan Morris,1974-02-07,ethan.morris@example.com,555-6005,140 Valley Crest,Emergency,Cardiac Risk,0.86,"Immediate review recommended before transfer.",219,5,MNIST train split

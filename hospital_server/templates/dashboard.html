@@ -145,6 +145,23 @@
             border: 1px solid var(--line);
         }
         a { color: var(--accent-2); }
+        .record-detail {
+            font-size: 0.9rem;
+            max-height: 150px;
+            overflow: auto;
+            background: var(--soft);
+            padding: 10px;
+            border-radius: 8px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .batch-header {
+            background: var(--soft);
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            border-left: 4px solid var(--accent);
+        }
         @media (max-width: 860px) {
             .stats, .grid, .form-grid { grid-template-columns: 1fr; }
         }
@@ -226,6 +243,18 @@
                 </div>
             </div>
         </section>
+
+        <section class="panel">
+            <div class="muted">Browse</div>
+            <h2>View received patient data in detail</h2>
+            <p class="muted">Retrieve and browse anonymized patient records received from other hospitals</p>
+            <div style="display:flex;gap:10px;align-items:center;margin-top:8px;">
+                <button id="retrieveBtn" class="secondary">📥 Retrieve Patient Data</button>
+                <button id="downloadBtn" class="secondary" disabled>⬇️ Download Retrieved Data</button>
+            </div>
+            <div id="retrieveMessage" class="message"></div>
+            <div id="dataViewContainer"></div>
+        </section>
     </div>
 
     <script>
@@ -240,8 +269,15 @@
             submissionList: document.getElementById('submissionList'),
             previewTable: document.getElementById('previewTable'),
             receivedSummary: document.getElementById('receivedSummary'),
-            receivedTable: document.getElementById('receivedTable')
+            receivedTable: document.getElementById('receivedTable'),
+            retrieveBtn: document.getElementById('retrieveBtn'),
+            retrieveMessage: document.getElementById('retrieveMessage'),
+            dataViewContainer: document.getElementById('dataViewContainer'),
+            downloadBtn: document.getElementById('downloadBtn')
         };
+
+        // Holds the last-retrieved batches so they can be downloaded
+        let lastRetrievedBatches = null;
 
         function showMessage(text, isError = false) {
             els.messageBox.style.display = 'block';
@@ -273,6 +309,62 @@
                     <td>${batch.timestamp}</td>
                 </tr>
             `).join('') : '<tr><td colspan="4">No processed records received yet.</td></tr>';
+        }
+
+        function renderRetrievedData(batches) {
+            if (!batches || batches.length === 0) {
+                els.dataViewContainer.innerHTML = '<div class="note">No patient data available yet. Upload records to another hospital first.</div>';
+                return;
+            }
+
+            let html = '<div style="margin-top: 16px;">';
+            
+            batches.forEach((batch, batchIdx) => {
+                const records = batch.records || [];
+                const privacySummary = batch.privacy_summary || {};
+                
+                html += `
+                    <div class="batch-header">
+                        <strong>Batch ${batchIdx + 1}</strong> from ${batch.source_hospital_id}
+                        <br><span class="muted">Records: ${records.length} | Removal Accuracy: ${privacySummary.removal_accuracy || 0}%</span>
+                        <br><span class="muted">Received: ${batch.timestamp}</span>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Record #</th>
+                                    <th>Data</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+                
+                records.forEach((record, recordIdx) => {
+                    const recordJson = typeof record === 'string' ? record : JSON.stringify(record, null, 2);
+                    html += `
+                        <tr>
+                            <td>${recordIdx + 1}</td>
+                            <td><div class="record-detail">${escapeHtml(recordJson)}</div></td>
+                        </tr>
+                    `;
+                });
+                
+                html += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            els.dataViewContainer.innerHTML = html;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
 
         async function refreshDashboard() {
@@ -342,6 +434,64 @@
                 await refreshDashboard();
             } catch (error) {
                 showMessage(error.message, true);
+            }
+        });
+
+        document.getElementById('retrieveBtn').addEventListener('click', async () => {
+            try {
+                els.retrieveMessage.style.display = 'none';
+                els.dataViewContainer.innerHTML = '<div class="note">Loading patient data...</div>';
+                
+                const response = await fetch('/retrieve_patient_data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const payload = await response.json();
+                if (!response.ok) throw new Error(payload.error || 'Failed to retrieve data');
+                
+                const batches = payload.batches || [];
+                if (batches.length === 0) {
+                    lastRetrievedBatches = null;
+                    els.dataViewContainer.innerHTML = '<div class="note">No patient data available yet. Patient records from other hospitals will appear here once they are received.</div>';
+                    els.downloadBtn.disabled = true;
+                } else {
+                    lastRetrievedBatches = batches;
+                    renderRetrievedData(batches);
+                    els.retrieveMessage.style.display = 'block';
+                    els.retrieveMessage.textContent = `✓ Retrieved ${batches.length} batch(es) with ${batches.reduce((sum, b) => sum + (b.records?.length || 0), 0)} total records`;
+                    els.downloadBtn.disabled = false;
+                }
+            } catch (error) {
+                els.dataViewContainer.innerHTML = '';
+                els.retrieveMessage.style.display = 'block';
+                els.retrieveMessage.textContent = error.message;
+                els.retrieveMessage.style.color = '#b33a2b';
+            }
+        });
+
+        document.getElementById('downloadBtn').addEventListener('click', () => {
+            try {
+                if (!lastRetrievedBatches) throw new Error('No retrieved data to download');
+                const payload = {
+                    hospital_id: els.hospitalId.textContent,
+                    retrieved_at: new Date().toISOString(),
+                    batch_count: lastRetrievedBatches.length,
+                    batches: lastRetrievedBatches
+                };
+                const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                const filename = `${els.hospitalId.textContent}_retrieved_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+            } catch (err) {
+                els.retrieveMessage.style.display = 'block';
+                els.retrieveMessage.textContent = err.message;
+                els.retrieveMessage.style.color = '#b33a2b';
             }
         });
 

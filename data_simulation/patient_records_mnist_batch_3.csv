@@ -1,0 +1,6 @@
+patient_id,name,date_of_birth,email,phone,address,department,condition,risk_score,notes,mnist_sample_id,mnist_digit_label,mnist_source
+MNIST-H3-5001,Mia Reed,1990-07-02,mia.reed@example.com,555-5001,33 Health Ave,General Medicine,Routine Screening,0.25,"Demo upload tied to MNIST metadata.",104,1,MNIST train split
+MNIST-H3-5002,Ethan Nguyen,1982-10-19,ethan.nguyen@example.com,555-5002,451 Sunset Blvd,Cardiology,Hypertension,0.69,"Call patient at 555-5002 if medication changes.",118,0,MNIST train split
+MNIST-H3-5003,Ivy Turner,1977-04-05,ivy.turner@example.com,555-5003,8 Forest Drive,Radiology,Asthma,0.41,"Review notes and email ivy.turner@example.com.",129,6,MNIST train split
+MNIST-H3-5004,Liam Kim,1968-12-27,liam.kim@example.com,555-5004,220 Meadow Street,Oncology,Cardiac Risk,0.81,"Priority oncology routing for further review.",143,2,MNIST train split
+MNIST-H3-5005,Sophia Morris,1995-09-14,sophia.morris@example.com,555-5005,72 Kingfisher Lane,Emergency,Diabetes,0.58,"Stable but requires routine lab follow-up.",157,3,MNIST train split

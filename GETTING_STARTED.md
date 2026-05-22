@@ -35,13 +35,13 @@ pip install -r requirements.txt
 python main_server/app.py
 
 # Terminal 2:
-HOSPITAL_PORT=5001 python hospital_server/app.py
+HOSPITAL_ID=hospital_1 PORT=5001 python hospital_server/app.py
 
 # Terminal 3:
-HOSPITAL_PORT=5002 python hospital_server/app.py
+HOSPITAL_ID=hospital_2 PORT=5002 python hospital_server/app.py
 
 # Terminal 4:
-HOSPITAL_PORT=5003 python hospital_server/app.py
+HOSPITAL_ID=hospital_3 PORT=5003 python hospital_server/app.py
 
 # Step 5: Run orchestrator (new terminal)
 python orchestrator.py

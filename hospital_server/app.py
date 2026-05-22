@@ -8,6 +8,7 @@ import io
 import json
 import os
 import sys
+import threading
 from datetime import datetime
 
 import requests
@@ -39,7 +40,10 @@ app = Flask(__name__)
 CORS(app)
 logger = setup_logger("hospital_server")
 
-hospital_id = HOSPITAL_ID or "hospital_1"
+# Hospital ID - read from environment first, then use config default, then fallback to "hospital_1"
+hospital_id = os.getenv("HOSPITAL_ID", "").strip() or HOSPITAL_ID or "hospital_1"
+# Hospital port - read from PORT env var first, then HOSPITAL_SERVER_PORT from config
+hospital_port = int(os.getenv("PORT", os.getenv("HOSPITAL_PORT", str(HOSPITAL_SERVER_PORT))))
 local_model = None
 current_round = 0
 training_history = []
@@ -47,6 +51,8 @@ local_data = None
 local_data_summary = {}
 last_submission = None
 received_processed_batches = []
+registry_heartbeat_started = False
+registry_stop_event = threading.Event()
 
 
 def now_iso():
@@ -78,11 +84,12 @@ def load_hospital_mnist_data(sample_count: int = 1200):
 
 def register_with_main_server():
     try:
+        # Register with the actual server URL using localhost
         requests.post(
             f"{get_main_server_base_url()}/register_hospital",
             json={
                 "hospital_id": hospital_id,
-                "server_url": f"http://{hospital_id}:{HOSPITAL_SERVER_PORT}",
+                "server_url": f"http://localhost:{hospital_port}",
             },
             timeout=10,
         )
@@ -90,10 +97,25 @@ def register_with_main_server():
         logger.warning("Unable to register hospital with main server: %s", exc)
 
 
+def ensure_registry_heartbeat():
+    global registry_heartbeat_started
+    if registry_heartbeat_started:
+        return
+
+    def heartbeat_loop():
+        while not registry_stop_event.wait(60):
+            register_with_main_server()
+
+    thread = threading.Thread(target=heartbeat_loop, name="hospital-registry-heartbeat", daemon=True)
+    thread.start()
+    registry_heartbeat_started = True
+
+
 def bootstrap_hospital():
     initialize_local_model()
     load_hospital_mnist_data()
     register_with_main_server()
+    ensure_registry_heartbeat()
 
 
 def fetch_global_model():
@@ -218,6 +240,7 @@ def dashboard():
 
 @app.route("/health", methods=["GET"])
 def health_check():
+    register_with_main_server()
     return jsonify(
         {
             "status": "healthy",
@@ -269,7 +292,12 @@ def upload_patient_records():
         )
         payload = response.json()
         if response.status_code != 200:
-            return jsonify({"error": payload.get("error", "Upload failed")}), response.status_code
+            error_message = payload.get("error", "Upload failed")
+            if response.status_code == 400:
+                active_destinations = fetch_active_hospitals()
+                if active_destinations:
+                    error_message = f"{error_message}. Active destinations: {', '.join(active_destinations)}"
+            return jsonify({"error": error_message}), response.status_code
 
         last_submission = {
             "destination_hospital_id": destination_hospital_id,
@@ -296,6 +324,33 @@ def sync_and_train():
         return jsonify({"error": "Failed to submit update"}), 500
     current_round += 1
     return jsonify({"message": "Training completed", "metrics": metrics, "round": current_round}), 200
+
+
+@app.route("/retrieve_patient_data", methods=["POST"])
+def retrieve_patient_data():
+    """Retrieve patient data from main server for presentation/viewing purposes (non-consuming)"""
+    try:
+        register_with_main_server()
+        response = requests.get(
+            f"{get_main_server_base_url()}/processed_records/{hospital_id}?consume=false",
+            timeout=15,
+        )
+        if response.status_code != 200:
+            return jsonify({"error": "Failed to retrieve data from main server"}), 500
+        
+        payload = response.json()
+        batches = payload.get("batches", [])
+        
+        return jsonify({
+            "hospital_id": hospital_id,
+            "batch_count": len(batches),
+            "record_count": sum(len(batch.get("records", [])) for batch in batches),
+            "batches": batches,
+            "timestamp": now_iso()
+        }), 200
+    except Exception as exc:
+        logger.error("Error retrieving patient data: %s", exc)
+        return jsonify({"error": str(exc)}), 500
 
 
 @app.route("/dashboard_data", methods=["GET"])
@@ -325,7 +380,6 @@ def get_dashboard_data():
 
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", str(HOSPITAL_SERVER_PORT)))
-    logger.info("Starting Hospital Server on 0.0.0.0:%s", port)
+    logger.info("Starting Hospital Server '%s' on 0.0.0.0:%s", hospital_id, hospital_port)
     bootstrap_hospital()
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=hospital_port, debug=False)

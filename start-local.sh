@@ -54,8 +54,9 @@ sleep 2
 # Start hospital servers
 for i in 1 2 3; do
     port=$((5000 + i))
+    hospital_id="hospital_$i"
     echo "Starting Hospital Server $i on port $port..."
-    HOSPITAL_PORT=$port $PYTHON hospital_server/app.py > logs/hospital_server_$i.log 2>&1 &
+    HOSPITAL_ID=$hospital_id PORT=$port $PYTHON hospital_server/app.py > logs/hospital_server_$i.log 2>&1 &
     HOSPITAL_PIDS="$HOSPITAL_PIDS $!"
     echo "  PID: $!"
 done
