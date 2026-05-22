@@ -1,0 +1,26 @@
+[
+  {
+    "patient_id": "HOSP1-1001",
+    "name": "Jane Miller",
+    "date_of_birth": "1987-04-16",
+    "email": "jane.miller@example.com",
+    "phone": "555-0101",
+    "address": "145 Health Ave",
+    "department": "Cardiology",
+    "condition": "Hypertension",
+    "risk_score": 0.74,
+    "notes": "Follow-up requested for jane.miller@example.com"
+  },
+  {
+    "patient_id": "HOSP1-1002",
+    "name": "Robert Singh",
+    "date_of_birth": "1979-11-08",
+    "email": "robert.singh@example.com",
+    "phone": "555-0102",
+    "address": "18 Cedar Road",
+    "department": "Neurology",
+    "condition": "Migraine",
+    "risk_score": 0.41,
+    "notes": "Contact spouse at 555-2020 if symptoms worsen"
+  }
+]

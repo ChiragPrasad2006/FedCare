@@ -1,0 +1,26 @@
+[
+  {
+    "patient_id": "HOSP2-2001",
+    "name": "[REDACTED_NAME]",
+    "date_of_birth": "[REDACTED_DOB]",
+    "email": "[REDACTED_EMAIL]",
+    "phone": "***-***-1101",
+    "address": "[REDACTED_ADDRESS]",
+    "department": "Oncology",
+    "condition": "Routine Screening",
+    "risk_score": 0.28,
+    "notes": "Email [REDACTED] after lab review"
+  },
+  {
+    "patient_id": "HOSP2-2002",
+    "name": "[REDACTED_NAME]",
+    "date_of_birth": "[REDACTED_DOB]",
+    "email": "[REDACTED_EMAIL]",
+    "phone": "***-***-1102",
+    "address": "[REDACTED_ADDRESS]",
+    "department": "Pulmonology",
+    "condition": "Asthma",
+    "risk_score": 0.63,
+    "notes": "Call patient directly at [REDACTED] before discharge"
+  }
+]

@@ -11,6 +11,8 @@ MAIN_SERVER_HOST = os.getenv("MAIN_SERVER_HOST", "localhost")
 MAIN_SERVER_PORT = int(os.getenv("MAIN_SERVER_PORT", 5000))
 MAIN_SERVER_URL = os.getenv("MAIN_SERVER_URL", "").strip()
 HOSPITAL_SERVER_PORT = int(os.getenv("HOSPITAL_SERVER_PORT", 5001))
+HOSPITAL_ID = os.getenv("HOSPITAL_ID", "").strip()
+HOSPITAL_REGISTRY_TTL_SECONDS = int(os.getenv("HOSPITAL_REGISTRY_TTL_SECONDS", 300))
 
 # Federated Learning Configuration
 NUM_ROUNDS = int(os.getenv("NUM_ROUNDS", 10))

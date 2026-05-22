@@ -1,389 +1,362 @@
 """
-Main Server (Cloud) - Aggregates model updates from hospitals
+Main Server - hosts the global model, anonymizes uploaded records, and routes them.
 """
-import os
-import threading
-from datetime import datetime
-from flask import Flask, request, jsonify, render_template
-from flask_cors import CORS
-import numpy as np
-import sys
+from __future__ import annotations
 
-# Add parent directory to path
+import os
+import sys
+import threading
+from datetime import datetime, timedelta
+
+import numpy as np
+from flask import Flask, jsonify, render_template, request
+from flask_cors import CORS
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from shared import (
-    setup_logger, create_federated_model, compile_model, 
-    get_model_weights, set_model_weights, average_weights,
-    MAIN_SERVER_HOST, MAIN_SERVER_PORT, NUM_ROUNDS, NUM_HOSPITALS,
-    LEARNING_RATE
+    LEARNING_RATE,
+    MAIN_SERVER_HOST,
+    MAIN_SERVER_PORT,
+    NUM_HOSPITALS,
+    NUM_ROUNDS,
+    average_weights,
+    compile_model,
+    create_federated_model,
+    get_model_weights,
+    set_model_weights,
+    setup_logger,
+    HOSPITAL_REGISTRY_TTL_SECONDS,
 )
+from shared.mnist_data import bootstrap_model_on_mnist, mnist_dataset_status
+from shared.privacy import analyze_and_anonymize_records
 
-# Initialize Flask app
+
 app = Flask(__name__)
 CORS(app)
-
-# Setup logging
 logger = setup_logger("main_server")
 
-# Global variables
 global_model = None
 current_round = 0
 hospital_updates = {}
 training_metrics = []
-privacy_reports = {}
+processed_record_routes = {}
+transfer_history = []
+active_hospitals = {}
+mnist_bootstrap = {
+    "ready": False,
+    "dataset": "MNIST",
+    "sample_count": 0,
+    "accuracy": 0.0,
+    "loss": 0.0,
+    "epochs": 0,
+    "error": None,
+}
 lock = threading.Lock()
 
 
+def now_iso() -> str:
+    return datetime.utcnow().isoformat() + "Z"
+
+
 def initialize_global_model():
-    """Initialize the global model"""
-    global global_model
-    logger.info("Initializing global model...")
+    """Initialize and warm-start the global model with MNIST."""
+    global global_model, mnist_bootstrap
+    logger.info("Initializing global model")
     global_model = create_federated_model()
     global_model = compile_model(global_model, learning_rate=LEARNING_RATE)
-    logger.info("Global model initialized successfully")
+    try:
+        mnist_bootstrap = bootstrap_model_on_mnist(global_model)
+        mnist_bootstrap["ready"] = True
+        mnist_bootstrap["timestamp"] = now_iso()
+    except Exception as exc:
+        mnist_bootstrap = {
+            "ready": False,
+            "dataset": "MNIST",
+            "sample_count": 0,
+            "accuracy": 0.0,
+            "loss": 0.0,
+            "epochs": 0,
+            "error": str(exc),
+            "timestamp": now_iso(),
+        }
+        logger.error("MNIST bootstrap failed: %s", exc)
+
+
+def ensure_model_ready():
+    if global_model is None:
+        initialize_global_model()
+
+
+def prune_inactive_hospitals():
+    cutoff = datetime.utcnow() - timedelta(seconds=HOSPITAL_REGISTRY_TTL_SECONDS)
+    inactive = [
+        hospital_id
+        for hospital_id, info in active_hospitals.items()
+        if datetime.fromisoformat(info["last_seen"].replace("Z", "")) < cutoff
+    ]
+    for hospital_id in inactive:
+        active_hospitals.pop(hospital_id, None)
+
+
+def active_hospital_ids():
+    prune_inactive_hospitals()
+    return sorted(active_hospitals.keys())
 
 
 def summarize_metrics():
-    """Build summary metrics for dashboard consumption."""
     if not training_metrics:
-        return {
-            'latest_round_accuracy': 0.0,
-            'latest_round_loss': 0.0,
-            'average_accuracy': 0.0,
-            'average_loss': 0.0,
-        }
+        return {"latest_round_accuracy": 0.0, "latest_round_loss": 0.0}
 
-    latest_round = max(item['round'] for item in training_metrics)
-    latest_items = [item for item in training_metrics if item['round'] == latest_round]
-
-    latest_round_accuracy = float(np.mean([
-        item['metrics'].get('accuracy', 0.0) for item in latest_items
-    ])) if latest_items else 0.0
-    latest_round_loss = float(np.mean([
-        item['metrics'].get('loss', 0.0) for item in latest_items
-    ])) if latest_items else 0.0
-
+    latest_round = max(item["round"] for item in training_metrics)
+    latest_items = [item for item in training_metrics if item["round"] == latest_round]
+    latest_round_accuracy = float(np.mean([item["metrics"].get("accuracy", 0.0) for item in latest_items]))
+    latest_round_loss = float(np.mean([item["metrics"].get("loss", 0.0) for item in latest_items]))
     return {
-        'latest_round_accuracy': round(latest_round_accuracy * 100, 2),
-        'latest_round_loss': round(latest_round_loss, 4),
-        'average_accuracy': round(float(np.mean([
-            item['metrics'].get('accuracy', 0.0) for item in training_metrics
-        ])) * 100, 2),
-        'average_loss': round(float(np.mean([
-            item['metrics'].get('loss', 0.0) for item in training_metrics
-        ])), 4),
+        "latest_round_accuracy": round(latest_round_accuracy * 100, 2),
+        "latest_round_loss": round(latest_round_loss, 4),
     }
 
 
-def summarize_privacy():
-    """Aggregate privacy statistics reported by hospitals."""
-    if not privacy_reports:
-        return {
-            'connected_hospitals': 0,
-            'overall_removal_accuracy': 0.0,
-            'total_records_processed': 0,
-            'total_detected_pii': 0,
-            'total_residual_risk': 0,
-        }
-
-    reports = list(privacy_reports.values())
-    total_detected = sum(item['privacy_summary'].get('detected_pii_items', 0) for item in reports)
-    total_redacted = sum(item['privacy_summary'].get('redacted_items', 0) for item in reports)
-    total_residual = sum(item['privacy_summary'].get('residual_risk_items', 0) for item in reports)
-    total_records = sum(item['privacy_summary'].get('total_records', 0) for item in reports)
-
-    overall_accuracy = (
-        round(max(total_redacted - total_residual, 0) / total_detected * 100, 2)
-        if total_detected else 100.0
-    )
-
-    return {
-        'connected_hospitals': len(reports),
-        'overall_removal_accuracy': overall_accuracy,
-        'total_records_processed': total_records,
-        'total_detected_pii': total_detected,
-        'total_residual_risk': total_residual,
+def summarize_routes():
+    queued_by_hospital = {
+        hospital_id: sum(len(batch.get("records", [])) for batch in batches)
+        for hospital_id, batches in processed_record_routes.items()
     }
+    return {
+        "total_records_waiting": sum(queued_by_hospital.values()),
+        "queued_by_hospital": queued_by_hospital,
+        "recent_transfers": transfer_history[-12:],
+    }
+
+
+def register_hospital(hospital_id: str, server_url: str | None = None):
+    with lock:
+        active_hospitals[hospital_id] = {
+            "hospital_id": hospital_id,
+            "server_url": server_url or "",
+            "last_seen": now_iso(),
+        }
 
 
 def aggregate_weights(round_num):
-    """Aggregate weights from all hospitals"""
-    global global_model, hospital_updates
-    
+    global global_model
     with lock:
-        logger.info(f"Aggregating weights for round {round_num}...")
-        
         if not hospital_updates:
-            logger.warning("No hospital updates received for aggregation")
             return False
-        
-        # Collect all weights
+
         weights_list = []
-        hospital_count = 0
-        
-        for hospital_id, data in hospital_updates.items():
-            if 'weights' in data:
-                try:
-                    from shared.communication import ServerCommunicator
-                    comm = ServerCommunicator()
-                    weights = comm.receive_model_weights(data['weights'])
-                    if weights is not None:
-                        weights_list.append(weights)
-                        hospital_count += 1
-                except Exception as e:
-                    logger.error(f"Error processing weights from {hospital_id}: {e}")
-        
-        logger.info(f"Received weights from {hospital_count} hospitals")
-        
-        if weights_list:
-            # Average weights
-            averaged_weights = average_weights(weights_list)
-            set_model_weights(global_model, averaged_weights)
-            logger.info(f"Model aggregated successfully with {hospital_count} updates")
-            
-            # Log metrics
-            for hospital_id, data in hospital_updates.items():
-                if 'metrics' in data:
-                    training_metrics.append({
-                        'round': round_num,
-                        'hospital_id': hospital_id,
-                        'metrics': data['metrics'],
-                        'timestamp': datetime.now().isoformat()
-                    })
-            
-            # Clear hospital updates for next round
-            hospital_updates.clear()
-            return True
-        
-        return False
-
-
-@app.route('/health', methods=['GET'])
-def health_check():
-    """Health check endpoint"""
-    return jsonify({
-        'status': 'healthy',
-        'timestamp': datetime.now().isoformat(),
-        'current_round': current_round
-    }), 200
-
-
-@app.route('/', methods=['GET'])
-def dashboard():
-    """Serve main server dashboard UI."""
-    return render_template('dashboard.html')
-
-
-@app.route('/initialize', methods=['POST'])
-def initialize():
-    """Initialize federated learning process"""
-    global current_round
-    
-    logger.info("Received initialization request")
-    current_round = 0
-    hospital_updates.clear()
-    initialize_global_model()
-    
-    return jsonify({
-        'message': 'Federated learning initialized',
-        'model_initialized': True,
-        'start_round': 0
-    }), 200
-
-
-@app.route('/get_global_model', methods=['GET'])
-def get_global_model():
-    """Get current global model weights"""
-    if global_model is None:
-        initialize_global_model()
-    
-    try:
-        weights = get_model_weights(global_model)
         from shared.communication import ServerCommunicator
-        comm = ServerCommunicator()
-        
-        import pickle
+
+        communicator = ServerCommunicator()
+        for hospital_id, data in hospital_updates.items():
+            if "weights" not in data:
+                continue
+            weights = communicator.receive_model_weights(data["weights"])
+            if weights is not None:
+                weights_list.append(weights)
+
+        if not weights_list:
+            return False
+
+        averaged_weights = average_weights(weights_list)
+        set_model_weights(global_model, averaged_weights)
+
+        for hospital_id, data in hospital_updates.items():
+            training_metrics.append(
+                {
+                    "round": round_num,
+                    "hospital_id": hospital_id,
+                    "metrics": data.get("metrics", {}),
+                    "timestamp": now_iso(),
+                }
+            )
+
+        hospital_updates.clear()
+        return True
+
+
+@app.route("/", methods=["GET"])
+def dashboard():
+    return render_template("dashboard.html")
+
+
+@app.route("/health", methods=["GET"])
+def health_check():
+    ensure_model_ready()
+    return jsonify(
+        {
+            "status": "healthy",
+            "timestamp": now_iso(),
+            "mnist_ready": mnist_bootstrap["ready"],
+            "current_round": current_round,
+        }
+    ), 200
+
+
+@app.route("/register_hospital", methods=["POST"])
+def register_hospital_endpoint():
+    data = request.get_json() or {}
+    hospital_id = (data.get("hospital_id") or "").strip()
+    if not hospital_id:
+        return jsonify({"error": "hospital_id required"}), 400
+
+    register_hospital(hospital_id, data.get("server_url"))
+    return jsonify({"message": "Hospital registered", "hospital_id": hospital_id, "timestamp": now_iso()}), 200
+
+
+@app.route("/hospital_directory", methods=["GET"])
+def hospital_directory():
+    exclude = (request.args.get("exclude") or "").strip()
+    hospitals = [hospital_id for hospital_id in active_hospital_ids() if hospital_id != exclude]
+    return jsonify({"hospitals": hospitals, "timestamp": now_iso()}), 200
+
+
+@app.route("/get_global_model", methods=["GET"])
+def get_global_model():
+    ensure_model_ready()
+    try:
         import base64
-        weights_bytes = pickle.dumps(weights)
-        weights_b64 = base64.b64encode(weights_bytes).decode('utf-8')
-        
-        logger.info(f"Sending global model for round {current_round}")
-        
-        return jsonify({
-            'weights': weights_b64,
-            'round': current_round,
-            'timestamp': datetime.now().isoformat()
-        }), 200
-    except Exception as e:
-        logger.error(f"Error retrieving global model: {e}")
-        return jsonify({'error': str(e)}), 500
+        import pickle
 
-
-@app.route('/submit_update', methods=['POST'])
-def submit_update():
-    """Receive model updates from hospitals"""
-    global current_round, hospital_updates
-    
-    try:
-        data = request.get_json()
-        hospital_id = data.get('hospital_id')
-        
-        if not hospital_id:
-            return jsonify({'error': 'hospital_id required'}), 400
-        
-        logger.info(f"Received update from hospital {hospital_id}")
-        
-        with lock:
-            hospital_updates[hospital_id] = {
-                'weights': data.get('weights'),
-                'metrics': data.get('metrics', {}),
-                'timestamp': datetime.now().isoformat()
-            }
-        
-        return jsonify({
-            'message': 'Update received',
-            'hospital_id': hospital_id,
-            'timestamp': datetime.now().isoformat()
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error in submit_update: {e}")
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/aggregate', methods=['POST'])
-def aggregate():
-    """Trigger aggregation and start new round"""
-    global current_round
-    
-    try:
-        data = request.get_json() or {}
-        trigger_next_round = data.get('trigger_next_round', True)
-        
-        logger.info(f"Starting aggregation for round {current_round}")
-        
-        success = aggregate_weights(current_round)
-        
-        if success and trigger_next_round:
-            current_round += 1
-            logger.info(f"Advanced to round {current_round}")
-        
-        return jsonify({
-            'message': 'Aggregation completed',
-            'round': current_round,
-            'success': success,
-            'timestamp': datetime.now().isoformat()
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error in aggregate: {e}")
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/metrics', methods=['GET'])
-def get_metrics():
-    """Get training metrics"""
-    try:
-        return jsonify({
-            'metrics': training_metrics,
-            'total_rounds': current_round,
-            'timestamp': datetime.now().isoformat()
-        }), 200
-    except Exception as e:
-        logger.error(f"Error retrieving metrics: {e}")
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/submit_privacy_summary', methods=['POST'])
-def submit_privacy_summary():
-    """Receive anonymization and patient-record privacy summaries from hospitals."""
-    try:
-        data = request.get_json() or {}
-        hospital_id = data.get('hospital_id')
-        if not hospital_id:
-            return jsonify({'error': 'hospital_id required'}), 400
-
-        with lock:
-            privacy_reports[hospital_id] = {
-                'hospital_id': hospital_id,
-                'privacy_summary': data.get('privacy_summary', {}),
-                'sample_records': data.get('sample_records', []),
-                'hospital_profile': data.get('hospital_profile', {}),
-                'timestamp': datetime.now().isoformat(),
-            }
-
-        return jsonify({
-            'message': 'Privacy summary received',
-            'hospital_id': hospital_id,
-            'timestamp': datetime.now().isoformat(),
-        }), 200
+        weights = get_model_weights(global_model)
+        weights_b64 = base64.b64encode(pickle.dumps(weights)).decode("utf-8")
+        return jsonify({"weights": weights_b64, "round": current_round, "timestamp": now_iso()}), 200
     except Exception as exc:
-        logger.error(f"Error in submit_privacy_summary: {exc}")
-        return jsonify({'error': str(exc)}), 500
+        logger.error("Error retrieving global model: %s", exc)
+        return jsonify({"error": str(exc)}), 500
 
 
-@app.route('/status', methods=['GET'])
-def get_status():
-    """Get current system status"""
+@app.route("/submit_update", methods=["POST"])
+def submit_update():
+    data = request.get_json() or {}
+    hospital_id = (data.get("hospital_id") or "").strip()
+    if not hospital_id:
+        return jsonify({"error": "hospital_id required"}), 400
+
+    register_hospital(hospital_id, data.get("server_url"))
     with lock:
-        pending_updates = len(hospital_updates)
-    
-    return jsonify({
-        'current_round': current_round,
-        'pending_hospital_updates': pending_updates,
-        'total_hospitals_reporting': len(hospital_updates),
-        'model_initialized': global_model is not None,
-        'timestamp': datetime.now().isoformat()
-    }), 200
+        hospital_updates[hospital_id] = {
+            "weights": data.get("weights"),
+            "metrics": data.get("metrics", {}),
+            "timestamp": now_iso(),
+        }
+
+    return jsonify({"message": "Update received", "hospital_id": hospital_id, "timestamp": now_iso()}), 200
 
 
-@app.route('/dashboard_data', methods=['GET'])
+@app.route("/aggregate", methods=["POST"])
+def aggregate():
+    global current_round
+    ensure_model_ready()
+    success = aggregate_weights(current_round)
+    if success:
+        current_round += 1
+    return jsonify({"message": "Aggregation completed", "success": success, "round": current_round}), 200
+
+
+@app.route("/submit_patient_records", methods=["POST"])
+def submit_patient_records():
+    """Receive raw hospital records, anonymize them, then route to the chosen hospital."""
+    data = request.get_json() or {}
+    source_hospital_id = (data.get("source_hospital_id") or "").strip()
+    destination_hospital_id = (data.get("destination_hospital_id") or "").strip()
+    records = data.get("records", [])
+
+    if not source_hospital_id or not destination_hospital_id:
+        return jsonify({"error": "source_hospital_id and destination_hospital_id are required"}), 400
+    if source_hospital_id == destination_hospital_id:
+        return jsonify({"error": "source and destination hospitals must be different"}), 400
+    if destination_hospital_id not in active_hospital_ids():
+        return jsonify({"error": "destination hospital is not currently active"}), 400
+    if not isinstance(records, list) or not records:
+        return jsonify({"error": "records must be a non-empty list"}), 400
+
+    anonymized_records, privacy_summary = analyze_and_anonymize_records(records)
+    batch = {
+        "source_hospital_id": source_hospital_id,
+        "destination_hospital_id": destination_hospital_id,
+        "records": anonymized_records,
+        "privacy_summary": privacy_summary,
+        "timestamp": now_iso(),
+    }
+
+    with lock:
+        processed_record_routes.setdefault(destination_hospital_id, []).append(batch)
+        transfer_history.append(
+            {
+                "source_hospital_id": source_hospital_id,
+                "destination_hospital_id": destination_hospital_id,
+                "record_count": len(anonymized_records),
+                "removal_accuracy": privacy_summary.get("removal_accuracy", 0.0),
+                "timestamp": batch["timestamp"],
+            }
+        )
+
+    return jsonify(
+        {
+            "message": "Records anonymized by main server and routed",
+            "destination_hospital_id": destination_hospital_id,
+            "record_count": len(anonymized_records),
+            "privacy_summary": privacy_summary,
+            "preview": anonymized_records[:5],
+            "timestamp": batch["timestamp"],
+        }
+    ), 200
+
+
+@app.route("/processed_records/<hospital_id>", methods=["GET"])
+def get_processed_records(hospital_id):
+    consume = request.args.get("consume", "false").lower() == "true"
+    with lock:
+        batches = list(processed_record_routes.get(hospital_id, []))
+        if consume:
+            processed_record_routes[hospital_id] = []
+
+    return jsonify(
+        {
+            "hospital_id": hospital_id,
+            "batch_count": len(batches),
+            "record_count": sum(len(batch.get("records", [])) for batch in batches),
+            "batches": batches,
+            "timestamp": now_iso(),
+        }
+    ), 200
+
+
+@app.route("/dashboard_data", methods=["GET"])
 def get_dashboard_data():
-    """Provide dashboard-friendly aggregated system state."""
-    with lock:
-        pending_updates = len(hospital_updates)
-        hospital_snapshots = list(privacy_reports.values())
-
-    return jsonify({
-        'federated_status': {
-            'current_round': current_round,
-            'pending_hospital_updates': pending_updates,
-            'total_hospitals_reporting': len(hospital_updates),
-            'model_initialized': global_model is not None,
-            'timestamp': datetime.now().isoformat(),
-        },
-        'training_summary': summarize_metrics(),
-        'privacy_summary': summarize_privacy(),
-        'hospital_privacy_reports': hospital_snapshots,
-        'training_metrics': training_metrics[-12:],
-    }), 200
+    ensure_model_ready()
+    return jsonify(
+        {
+            "mnist_bootstrap": mnist_bootstrap,
+            "mnist_dataset": mnist_dataset_status(),
+            "active_hospitals": [active_hospitals[hospital_id] for hospital_id in active_hospital_ids()],
+            "route_summary": summarize_routes(),
+            "training_summary": summarize_metrics(),
+            "current_round": current_round,
+            "num_rounds_configured": NUM_ROUNDS,
+            "timestamp": now_iso(),
+        }
+    ), 200
 
 
-@app.route('/reset', methods=['POST'])
+@app.route("/reset", methods=["POST"])
 def reset():
-    """Reset the federated learning process"""
-    global current_round, hospital_updates, training_metrics, global_model, privacy_reports
-    
-    logger.info("Resetting federated learning process...")
-    
+    global current_round, global_model
     with lock:
         current_round = 0
         hospital_updates.clear()
         training_metrics.clear()
-        privacy_reports.clear()
+        processed_record_routes.clear()
+        transfer_history.clear()
         global_model = None
-    
     initialize_global_model()
-    
-    return jsonify({
-        'message': 'System reset successfully',
-        'timestamp': datetime.now().isoformat()
-    }), 200
+    return jsonify({"message": "System reset successfully", "timestamp": now_iso()}), 200
 
 
-if __name__ == '__main__':
-    port = int(os.getenv('PORT', str(MAIN_SERVER_PORT)))
-    logger.info(f"Starting Main Server on {MAIN_SERVER_HOST}:{port}")
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", str(MAIN_SERVER_PORT)))
+    logger.info("Starting Main Server on %s:%s", MAIN_SERVER_HOST, port)
     initialize_global_model()
     app.run(host=MAIN_SERVER_HOST, port=port, debug=False)

@@ -39,6 +39,8 @@ spec:
           value: "5"
         - name: NUM_HOSPITALS
           value: "2"
+        - name: HOSPITAL_REGISTRY_TTL_SECONDS
+          value: "300"
         - name: LOG_LEVEL
           value: "INFO"
         resources:
@@ -52,13 +54,13 @@ spec:
           httpGet:
             path: /health
             port: 5000
-          initialDelaySeconds: 20
+          initialDelaySeconds: 60
           periodSeconds: 30
         readinessProbe:
           httpGet:
             path: /health
             port: 5000
-          initialDelaySeconds: 10
+          initialDelaySeconds: 30
           periodSeconds: 10
 
 ---
@@ -109,12 +111,18 @@ spec:
         env:
         - name: HOSPITAL_PORT
           value: "5001"
+        - name: HOSPITAL_SERVER_PORT
+          value: "5001"
+        - name: HOSPITAL_ID
+          value: "hospital_1"
         - name: MAIN_SERVER_HOST
           value: "main-server"
         - name: MAIN_SERVER_PORT
           value: "5000"
         - name: MAIN_SERVER_URL
           value: "http://main-server:5000"
+        - name: NUM_HOSPITALS
+          value: "2"
         - name: LOG_LEVEL
           value: "INFO"
         resources:
@@ -128,13 +136,13 @@ spec:
           httpGet:
             path: /health
             port: 5001
-          initialDelaySeconds: 20
+          initialDelaySeconds: 40
           periodSeconds: 30
         readinessProbe:
           httpGet:
             path: /health
             port: 5001
-          initialDelaySeconds: 10
+          initialDelaySeconds: 20
           periodSeconds: 10
 
 ---
@@ -185,12 +193,18 @@ spec:
         env:
         - name: HOSPITAL_PORT
           value: "5001"
+        - name: HOSPITAL_SERVER_PORT
+          value: "5001"
+        - name: HOSPITAL_ID
+          value: "hospital_2"
         - name: MAIN_SERVER_HOST
           value: "main-server"
         - name: MAIN_SERVER_PORT
           value: "5000"
         - name: MAIN_SERVER_URL
           value: "http://main-server:5000"
+        - name: NUM_HOSPITALS
+          value: "2"
         - name: LOG_LEVEL
           value: "INFO"
         resources:
@@ -204,13 +218,13 @@ spec:
           httpGet:
             path: /health
             port: 5001
-          initialDelaySeconds: 20
+          initialDelaySeconds: 40
           periodSeconds: 30
         readinessProbe:
           httpGet:
             path: /health
             port: 5001
-          initialDelaySeconds: 10
+          initialDelaySeconds: 20
           periodSeconds: 10
 
 ---
