@@ -104,9 +104,17 @@ class FederatedLearningOrchestrator:
         
         return True
     
-    def run_federated_learning(self, num_rounds: int):
-        """Run federated learning for specified rounds"""
+    def run_federated_learning(self, num_rounds: int, enable_personalization: bool = False):
+        """
+        Run federated learning for specified rounds with optional personalization.
+        
+        Args:
+            num_rounds: Number of FL rounds
+            enable_personalization: Enable FedProx personalization after aggregation
+        """
         logger.info(f"Starting federated learning for {num_rounds} rounds...")
+        if enable_personalization:
+            logger.info("Personalization enabled - will use FedProx after each aggregation")
         
         for round_num in range(num_rounds):
             logger.info(f"\n{'='*60}")
@@ -153,6 +161,35 @@ class FederatedLearningOrchestrator:
                 logger.info(f"Aggregation completed - Advanced to round {result.get('round')}")
             else:
                 logger.error("Aggregation failed")
+            
+            # Step 3: Optional personalization phase
+            if enable_personalization:
+                logger.info("Step 3: Hospitals personalizing models (FedProx)...")
+                result = self._make_request(
+                    'POST',
+                    f"{self.main_server_url}/trigger_personalization",
+                    {
+                        "round": round_num,
+                        "use_fedprox": True
+                    }
+                )
+                
+                if result:
+                    results = result.get('results', {})
+                    completed = sum(1 for r in results.values() if r.get('status') == 'completed')
+                    logger.info(f"Personalization completed for {completed}/{len(results)} hospitals")
+                    
+                    # Log personalization metrics
+                    for hospital_id, res in results.items():
+                        if res.get('status') == 'completed':
+                            metrics = res.get('metrics', {})
+                            logger.info(
+                                f"  {hospital_id} personalization - "
+                                f"Loss: {metrics.get('loss', 'N/A'):.4f}, "
+                                f"Accuracy: {metrics.get('accuracy', 'N/A'):.4f}"
+                            )
+                else:
+                    logger.error("Personalization trigger failed")
             
             # Wait a bit before next round
             time.sleep(2)

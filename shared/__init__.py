@@ -9,7 +9,11 @@ from .models import (
     compile_model,
     get_model_weights,
     set_model_weights,
-    average_weights
+    average_weights,
+    create_fedprox_model,
+    compute_proximal_term,
+    train_with_fedprox,
+    personalize_model
 )
 from .logger import setup_logger
 
@@ -21,5 +25,9 @@ __all__ = [
     'get_model_weights',
     'set_model_weights',
     'average_weights',
+    'create_fedprox_model',
+    'compute_proximal_term',
+    'train_with_fedprox',
+    'personalize_model',
     'setup_logger'
 ]

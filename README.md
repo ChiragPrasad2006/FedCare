@@ -157,9 +157,17 @@ Recommended for college demos:
 - `POST /generate_demo_records` - Generate demo patient records
 - `GET /patient_records` - Retrieve raw or anonymized patient records
 - `POST /sync_and_train` - Fetch model and train
+- `POST /personalize` - Fine-tune local model (standard personalization)
+- `POST /personalize_fedprox` - Fine-tune with FedProx proximal regularization
+- `GET /personalization_history` - Get personalization history
 - `GET /training_history` - Get training history
 - `GET /dashboard_data` - Dashboard data feed
 - `GET /status` - Get hospital status
+
+### Main Server (Personalization Endpoints)
+
+- `POST /trigger_personalization` - Trigger personalization on all hospitals
+- `GET /personalization_metrics` - Get aggregated personalization metrics
 
 ## Usage Examples
 
@@ -186,15 +194,40 @@ orchestrator.initialize_system()
 hospital_data, test_data = load_and_split_mnist_data(num_hospitals=3)
 orchestrator.load_hospital_data(hospital_data)
 
-# Run federated learning
-orchestrator.run_federated_learning(num_rounds=10)
+# Run federated learning WITH FedProx personalization
+orchestrator.run_federated_learning(
+    num_rounds=10,
+    enable_personalization=True  # NEW: Enable FedProx
+)
 
 # Get metrics
 metrics = orchestrator.get_metrics()
 print(metrics)
 ```
 
-### cURL Commands
+### FedProx Personalization Example
+
+```python
+import requests
+
+# After aggregation, trigger personalization on all hospitals
+response = requests.post(
+    "http://localhost:5000/trigger_personalization",
+    json={
+        "round": 5,
+        "use_fedprox": True  # Use FedProx with proximal regularization
+    }
+)
+
+# Check personalization results
+metrics = requests.get(
+    "http://localhost:5000/personalization_metrics?round=5"
+).json()
+
+print("Personalization Results:")
+for metric in metrics['personalization_metrics']:
+    print(f"  {metric['hospital_id']}: accuracy={metric['metrics']['accuracy']:.4f}")
+```
 
 ```bash
 # Health check
@@ -234,6 +267,17 @@ Edit `.env` file to configure:
 - `EPOCHS_PER_ROUND`: Local training epochs per round (default: 5)
 - `BATCH_SIZE`: Training batch size (default: 32)
 - `LEARNING_RATE`: Model learning rate (default: 0.001)
+
+### FedProx Personalization Configuration
+
+New configuration options for personalization:
+
+- `PERSONALIZATION_ENABLED`: Enable FedProx personalization (default: False)
+- `PERSONALIZATION_ROUNDS`: How many rounds before personalization (default: 3)
+- `PROXIMAL_MU`: Proximal coefficient (default: 0.01)
+- `PERSONAL_EPOCHS_PER_ROUND`: Personalization epochs (default: 3)
+
+For detailed configuration guide, see: `docs/FEDPROX_IMPLEMENTATION.md`
 
 ## Data Simulation
 
@@ -379,6 +423,24 @@ Support for AWS SageMaker deployment with:
 - Real HIPAA-compliant encryption
 - MongoDB backend for persistence
 - Web dashboard for monitoring
+
+## Documentation
+
+Comprehensive guides available in `docs/`:
+
+- **[FEDPROX_IMPLEMENTATION.md](docs/FEDPROX_IMPLEMENTATION.md)** - FedProx personalization setup and tuning
+- **[TRAINING_DATA_SOURCING.md](docs/TRAINING_DATA_SOURCING.md)** - Data sourcing strategies and training optimization
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System architecture and design
+- **[API.md](docs/API.md)** - Complete API reference
+- **[LOCAL_KUBERNETES_DEPLOYMENT.md](docs/LOCAL_KUBERNETES_DEPLOYMENT.md)** - Kubernetes deployment
+- **[GOOGLE_CLOUD_DEPLOYMENT.md](docs/GOOGLE_CLOUD_DEPLOYMENT.md)** - Google Cloud hosting
+
+## Examples
+
+Quick-start examples in `examples/`:
+
+- **fedprox_personalization_example.py** - FedProx personalization workflow
+- **main_server_training_example.py** - Training main server with medical datasets
 
 ## Contributing
 

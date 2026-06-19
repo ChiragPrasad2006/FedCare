@@ -9,6 +9,7 @@ import threading
 from datetime import datetime, timedelta
 
 import numpy as np
+import requests
 from flask import Flask, jsonify, render_template, request
 from flask_cors import CORS
 
@@ -20,6 +21,8 @@ from shared import (
     MAIN_SERVER_PORT,
     NUM_HOSPITALS,
     NUM_ROUNDS,
+    PERSONALIZATION_ENABLED,
+    PROXIMAL_MU,
     average_weights,
     compile_model,
     create_federated_model,
@@ -40,6 +43,7 @@ global_model = None
 current_round = 0
 hospital_updates = {}
 training_metrics = []
+personalization_metrics = []  # Track personalization results from all hospitals
 processed_record_routes = {}
 transfer_history = []
 active_hospitals = {}
@@ -253,6 +257,100 @@ def aggregate():
     if success:
         current_round += 1
     return jsonify({"message": "Aggregation completed", "success": success, "round": current_round}), 200
+
+
+@app.route("/trigger_personalization", methods=["POST"])
+def trigger_personalization():
+    """
+    Trigger personalization phase on all active hospitals after aggregation.
+    Optional: use FedProx or standard fine-tuning based on PERSONALIZATION_ENABLED.
+    
+    Expected JSON payload:
+    {
+        "round": <round_number>,
+        "use_fedprox": <true/false>,  # defaults to PERSONALIZATION_ENABLED
+        "hospitals": [<list of hospital IDs>]  # optional, defaults to all active
+    }
+    """
+    try:
+        data = request.get_json() or {}
+        round_num = data.get("round", current_round)
+        use_fedprox = data.get("use_fedprox", PERSONALIZATION_ENABLED)
+        hospital_ids = data.get("hospitals", active_hospital_ids())
+        
+        if not hospital_ids:
+            return jsonify({"error": "No active hospitals available"}), 400
+        
+        results = {}
+        for hospital_id in hospital_ids:
+            if hospital_id not in active_hospitals:
+                results[hospital_id] = {"status": "inactive"}
+                continue
+            
+            try:
+                hospital_url = active_hospitals[hospital_id].get("server_url", "")
+                if not hospital_url:
+                    results[hospital_id] = {"status": "no_url"}
+                    continue
+                
+                # Determine endpoint based on FedProx flag
+                endpoint = "/personalize_fedprox" if use_fedprox else "/personalize"
+                
+                response = requests.post(
+                    f"{hospital_url}{endpoint}",
+                    json={"round": round_num, "use_fedprox": use_fedprox},
+                    timeout=60
+                )
+                
+                if response.status_code == 200:
+                    personalization_metrics.append({
+                        "round": round_num,
+                        "hospital_id": hospital_id,
+                        "metrics": response.json().get("metrics", {}),
+                        "timestamp": now_iso()
+                    })
+                    results[hospital_id] = {
+                        "status": "completed",
+                        "metrics": response.json().get("metrics", {})
+                    }
+                else:
+                    results[hospital_id] = {
+                        "status": "failed",
+                        "reason": response.json().get("error", "unknown")
+                    }
+            except Exception as exc:
+                logger.error(f"Error triggering personalization for {hospital_id}: {exc}")
+                results[hospital_id] = {"status": "error", "reason": str(exc)}
+        
+        return jsonify({
+            "message": "Personalization triggered",
+            "round": round_num,
+            "personalization_type": "fedprox" if use_fedprox else "standard",
+            "results": results,
+            "timestamp": now_iso()
+        }), 200
+        
+    except Exception as exc:
+        logger.error("Error in personalization trigger: %s", exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/personalization_metrics", methods=["GET"])
+def get_personalization_metrics():
+    """Retrieve aggregated personalization metrics from all hospitals"""
+    limit = request.args.get("limit", 20, type=int)
+    round_num = request.args.get("round", None, type=int)
+    
+    if round_num is not None:
+        metrics = [m for m in personalization_metrics if m["round"] == round_num]
+    else:
+        metrics = personalization_metrics[-limit:]
+    
+    return jsonify({
+        "personalization_metrics": metrics,
+        "total_personalization_rounds": len(set(m["round"] for m in personalization_metrics)),
+        "timestamp": now_iso()
+    }), 200
 
 
 @app.route("/submit_patient_records", methods=["POST"])

@@ -26,6 +26,12 @@ INPUT_SHAPE = (28, 28, 1)  # MNIST-like data
 NUM_CLASSES = 10
 LEARNING_RATE = float(os.getenv("LEARNING_RATE", 0.001))
 
+# Personalization Configuration (FedProx)
+PERSONALIZATION_ENABLED = os.getenv("PERSONALIZATION_ENABLED", "False").lower() == "true"
+PERSONALIZATION_ROUNDS = int(os.getenv("PERSONALIZATION_ROUNDS", 3))
+PROXIMAL_MU = float(os.getenv("PROXIMAL_MU", 0.01))  # Proximal term coefficient
+PERSONAL_EPOCHS_PER_ROUND = int(os.getenv("PERSONAL_EPOCHS_PER_ROUND", 3))
+
 # Security and Privacy
 ENCRYPTION_ENABLED = os.getenv("ENCRYPTION_ENABLED", "False").lower() == "true"
 SECURE_AGGREGATION = os.getenv("SECURE_AGGREGATION", "False").lower() == "true"
