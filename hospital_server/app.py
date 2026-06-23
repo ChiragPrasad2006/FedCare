@@ -27,11 +27,16 @@ from shared import (
     MAIN_SERVER_PORT,
     MAIN_SERVER_URL,
     NUM_HOSPITALS,
+    PERSONALIZATION_ENABLED,
+    PROXIMAL_MU,
+    PERSONAL_EPOCHS_PER_ROUND,
     compile_model,
     create_federated_model,
     get_model_weights,
     set_model_weights,
     setup_logger,
+    train_with_fedprox,
+    personalize_model,
 )
 from shared.medical_data import get_hospital_medical_split
 
@@ -45,13 +50,11 @@ hospital_id = os.getenv("HOSPITAL_ID", "").strip() or HOSPITAL_ID or "hospital_1
 # Hospital port - read from PORT env var first, then HOSPITAL_SERVER_PORT from config
 hospital_port = int(os.getenv("PORT", os.getenv("HOSPITAL_PORT", str(HOSPITAL_SERVER_PORT))))
 local_model = None
+global_model_reference = None  # Store global model for FedProx
 current_round = 0
 training_history = []
-<<<<<<< Updated upstream
-=======
 personalization_history = []  # Track personalization metrics
 zero_shot_eval_results = []   # Track zero-shot evaluation metrics
->>>>>>> Stashed changes
 local_data = None
 local_data_summary = {}
 last_submission = None
@@ -124,6 +127,7 @@ def bootstrap_hospital():
 
 
 def fetch_global_model():
+    global global_model_reference
     try:
         response = requests.get(f"{get_main_server_base_url()}/get_global_model", timeout=30)
         if response.status_code != 200:
@@ -135,6 +139,10 @@ def fetch_global_model():
         weights = ServerCommunicator().receive_model_weights(payload["weights"])
         if weights is None:
             return False
+            
+        # Store global model weights for FedProx personalization
+        global_model_reference = weights
+        
         set_model_weights(local_model, weights)
         return True
     except Exception as exc:
@@ -372,6 +380,119 @@ def sync_and_train():
         return jsonify({"error": "Failed to submit update"}), 500
     current_round += 1
     return jsonify({"message": "Training completed", "metrics": metrics, "round": current_round}), 200
+
+
+@app.route("/personalize_fedprox", methods=["POST"])
+def personalize_fedprox():
+    """
+    Personalize local model using FedProx (proximal) fine-tuning.
+    Keeps model close to global model while adapting to local data.
+    """
+    global personalization_history
+    
+    if local_model is None or local_data is None or global_model_reference is None:
+        return jsonify({"error": "Model or data not initialized"}), 400
+    
+    try:
+        data = request.get_json() or {}
+        round_num = data.get("round", current_round)
+        use_fedprox = data.get("use_fedprox", True)
+        
+        images, labels = local_data
+        
+        if use_fedprox and PERSONALIZATION_ENABLED:
+            metrics = train_with_fedprox(
+                model=local_model,
+                X_train=images,
+                y_train=labels,
+                global_weights=global_model_reference,
+                epochs=PERSONAL_EPOCHS_PER_ROUND,
+                batch_size=BATCH_SIZE,
+                learning_rate=LEARNING_RATE * 0.5,
+                proximal_mu=PROXIMAL_MU,
+                verbose=0
+            )
+        else:
+            metrics = personalize_model(
+                model=local_model,
+                X_train=images,
+                y_train=labels,
+                global_weights=global_model_reference,
+                epochs=PERSONAL_EPOCHS_PER_ROUND,
+                batch_size=BATCH_SIZE,
+                learning_rate=LEARNING_RATE * 0.5,
+                verbose=0
+            )
+        
+        personalization_history.append({
+            "round": round_num,
+            "metrics": metrics,
+            "timestamp": now_iso()
+        })
+        
+        return jsonify({
+            "message": "Personalization completed",
+            "metrics": metrics,
+            "hospital_id": hospital_id,
+            "round": round_num
+        }), 200
+        
+    except Exception as exc:
+        logger.error("Error during personalization: %s", exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/personalize", methods=["POST"])
+def personalize():
+    """Standard personalization endpoint - fine-tune local model."""
+    global personalization_history
+    
+    if local_model is None or local_data is None or global_model_reference is None:
+        return jsonify({"error": "Model or data not initialized"}), 400
+    
+    try:
+        data = request.get_json() or {}
+        round_num = data.get("round", current_round)
+        images, labels = local_data
+        
+        metrics = personalize_model(
+            model=local_model,
+            X_train=images,
+            y_train=labels,
+            global_weights=global_model_reference,
+            epochs=PERSONAL_EPOCHS_PER_ROUND,
+            batch_size=BATCH_SIZE,
+            learning_rate=LEARNING_RATE * 0.5,
+            verbose=0
+        )
+        
+        personalization_history.append({
+            "round": round_num,
+            "metrics": metrics,
+            "timestamp": now_iso()
+        })
+        
+        return jsonify({
+            "message": "Personalization completed",
+            "metrics": metrics,
+            "hospital_id": hospital_id,
+            "round": round_num
+        }), 200
+        
+    except Exception as exc:
+        logger.error("Error during personalization: %s", exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/personalization_history", methods=["GET"])
+def get_personalization_history():
+    """Retrieve personalization history for monitoring"""
+    limit = request.args.get("limit", 10, type=int)
+    return jsonify({
+        "hospital_id": hospital_id,
+        "personalization_history": personalization_history[-limit:],
+        "total_personalizations": len(personalization_history)
+    }), 200
 
 
 @app.route("/retrieve_patient_data", methods=["POST"])
