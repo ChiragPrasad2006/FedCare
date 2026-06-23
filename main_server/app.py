@@ -32,14 +32,21 @@ from shared.medical_data import bootstrap_model_on_medical_data, medical_dataset
 from shared.privacy import analyze_and_anonymize_records
 
 
+# Configure logging
+logger = setup_logger("MainServer")
+
 app = Flask(__name__)
 CORS(app)
-logger = setup_logger("main_server")
 
+# Add lock for thread safety during model aggregation
+lock = threading.Lock()
+
+# Global state
 global_model = None
 current_round = 0
 hospital_updates = {}
 training_metrics = []
+personalization_metrics = []  # Track personalization results from all hospitals
 processed_record_routes = {}
 transfer_history = []
 active_hospitals = {}
@@ -49,10 +56,9 @@ medical_bootstrap = {
     "sample_count": 0,
     "accuracy": 0.0,
     "loss": 0.0,
-    "epochs": 0,
+    "timestamp": None,
     "error": None,
 }
-lock = threading.Lock()
 
 
 def now_iso() -> str:
@@ -76,7 +82,6 @@ def initialize_global_model():
             "sample_count": 0,
             "accuracy": 0.0,
             "loss": 0.0,
-            "epochs": 0,
             "error": str(exc),
             "timestamp": now_iso(),
         }
@@ -84,8 +89,11 @@ def initialize_global_model():
 
 
 def ensure_model_ready():
+    """Ensure the global model is initialized before performing operations."""
     if global_model is None:
-        initialize_global_model()
+        with lock:
+            if global_model is None:
+                initialize_global_model()
 
 
 def prune_inactive_hospitals():
@@ -303,6 +311,95 @@ def aggregate():
     if success:
         current_round += 1
     return jsonify({"message": "Aggregation completed", "success": success, "round": current_round}), 200
+
+
+@app.route("/trigger_personalization", methods=["POST"])
+def trigger_personalization():
+    """
+    Trigger personalization phase on all active hospitals after aggregation.
+    Optional: use FedProx or standard fine-tuning based on PERSONALIZATION_ENABLED.
+    """
+    try:
+        from shared import PERSONALIZATION_ENABLED
+        data = request.get_json() or {}
+        round_num = data.get("round", current_round)
+        use_fedprox = data.get("use_fedprox", PERSONALIZATION_ENABLED)
+        hospital_ids = data.get("hospitals", active_hospital_ids())
+        
+        if not hospital_ids:
+            return jsonify({"error": "No active hospitals available"}), 400
+        
+        results = {}
+        import requests
+        for hospital_id in hospital_ids:
+            if hospital_id not in active_hospitals:
+                results[hospital_id] = {"status": "inactive"}
+                continue
+            
+            try:
+                hospital_url = active_hospitals[hospital_id].get("server_url", "")
+                if not hospital_url:
+                    results[hospital_id] = {"status": "no_url"}
+                    continue
+                
+                # Determine endpoint based on FedProx flag
+                endpoint = "/personalize_fedprox" if use_fedprox else "/personalize"
+                
+                response = requests.post(
+                    f"{hospital_url}{endpoint}",
+                    json={"round": round_num, "use_fedprox": use_fedprox},
+                    timeout=60
+                )
+                
+                if response.status_code == 200:
+                    personalization_metrics.append({
+                        "round": round_num,
+                        "hospital_id": hospital_id,
+                        "metrics": response.json().get("metrics", {}),
+                        "timestamp": now_iso()
+                    })
+                    results[hospital_id] = {
+                        "status": "completed",
+                        "metrics": response.json().get("metrics", {})
+                    }
+                else:
+                    results[hospital_id] = {
+                        "status": "failed",
+                        "reason": response.json().get("error", "unknown")
+                    }
+            except Exception as exc:
+                logger.error(f"Error triggering personalization for {hospital_id}: {exc}")
+                results[hospital_id] = {"status": "error", "reason": str(exc)}
+        
+        return jsonify({
+            "message": "Personalization triggered",
+            "round": round_num,
+            "personalization_type": "fedprox" if use_fedprox else "standard",
+            "results": results,
+            "timestamp": now_iso()
+        }), 200
+        
+    except Exception as exc:
+        logger.error("Error in personalization trigger: %s", exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/personalization_metrics", methods=["GET"])
+def get_personalization_metrics():
+    """Retrieve aggregated personalization metrics from all hospitals"""
+    limit = request.args.get("limit", 20, type=int)
+    round_num = request.args.get("round", None, type=int)
+    
+    if round_num is not None:
+        metrics = [m for m in personalization_metrics if m["round"] == round_num]
+    else:
+        metrics = personalization_metrics[-limit:]
+    
+    return jsonify({
+        "personalization_metrics": metrics,
+        "total_personalization_rounds": len(set(m["round"] for m in personalization_metrics)),
+        "timestamp": now_iso()
+    }), 200
 
 
 @app.route("/submit_patient_records", methods=["POST"])
