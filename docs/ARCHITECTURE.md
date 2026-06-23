@@ -167,30 +167,28 @@ model.set_weights(weights)
 
 ## Model Architecture
 
-### Default Model (Simple CNN)
+### Default Model (Optimized Medical CNN)
 
 ```
-Input (28x28x1)
+Input (28x28x3 or 28x28x1)
   ↓
-Conv2D (32 filters, 3x3)
+Conv2D (32 filters, 3x3) + L2 Regularization
   ↓
-MaxPool (2x2)
+BatchNormalization + ReLU + MaxPool(2x2) + Dropout(0.25)
   ↓
-Conv2D (64 filters, 3x3)
+Conv2D (64 filters, 3x3) + L2 Regularization
   ↓
-MaxPool (2x2)
-  ↓
-Conv2D (64 filters, 3x3)
+BatchNormalization + ReLU + MaxPool(2x2) + Dropout(0.25)
   ↓
 Flatten
   ↓
-Dense (64, ReLU)
+Dense (128) + L2 Regularization
   ↓
-Dropout (0.5)
+BatchNormalization + ReLU + Dropout(0.5)
   ↓
-Dense (10, Softmax)
+Dense (Num Classes, Softmax)
   ↓
-Output (10 classes)
+Output (Medical Classes)
 ```
 
 ### Model Aggregation

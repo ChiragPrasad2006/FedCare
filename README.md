@@ -167,7 +167,7 @@ Recommended for college demos:
 
 ```python
 from orchestrator import FederatedLearningOrchestrator
-from data_simulation.data_generator import load_and_split_mnist_data
+from data_simulation.data_generator import load_and_split_medical_data
 
 # Initialize
 orchestrator = FederatedLearningOrchestrator(
@@ -183,7 +183,7 @@ orchestrator = FederatedLearningOrchestrator(
 orchestrator.initialize_system()
 
 # Load data
-hospital_data, test_data = load_and_split_mnist_data(num_hospitals=3)
+hospital_data, test_data = load_and_split_medical_data(num_hospitals=3)
 orchestrator.load_hospital_data(hospital_data)
 
 # Run federated learning
@@ -237,12 +237,12 @@ Edit `.env` file to configure:
 
 ## Data Simulation
 
-### Generate MNIST Data
+### Generate Medical Data
 
 ```python
-from data_simulation.data_generator import load_and_split_mnist_data
+from data_simulation.data_generator import load_and_split_medical_data
 
-hospital_data, test_data = load_and_split_mnist_data(
+hospital_data, test_data = load_and_split_medical_data(
     num_hospitals=3,
     test_size=0.2
 )

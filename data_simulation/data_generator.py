@@ -16,20 +16,16 @@ def generate_synthetic_patient_data(num_samples=200, num_features=784, num_class
     return X, y
 
 
-def load_and_split_mnist_data(num_hospitals=3, test_size=0.2):
-    """Load MNIST and split among hospitals"""
-    from tensorflow.keras.datasets import mnist
+def load_and_split_medical_data(num_hospitals=3, test_size=0.2):
+    """Load Medical Data and split among hospitals"""
+    import sys
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from shared.medical_data import ensure_medical_data_loaded
     
-    # Load MNIST
-    (X_train, y_train), (X_test, y_test) = mnist.load_data()
-    
-    # Normalize
-    X_train = X_train.astype(np.float32) / 255.0
-    X_test = X_test.astype(np.float32) / 255.0
-    
-    # Reshape
-    X_train = X_train.reshape(-1, 28, 28, 1)
-    X_test = X_test.reshape(-1, 28, 28, 1)
+    data = ensure_medical_data_loaded()
+    X_train, y_train = data["train"]
+    X_test, y_test = data["test"]
     
     # Split among hospitals
     hospital_data = []
@@ -135,8 +131,8 @@ if __name__ == "__main__":
     # Test data generation
     print("Generating test data...")
     
-    # Generate MNIST split
-    hospital_data, test_data = load_and_split_mnist_data(num_hospitals=3)
+    # Generate Medical split
+    hospital_data, test_data = load_and_split_medical_data(num_hospitals=3)
     print(f"Generated data for {len(hospital_data)} hospitals")
     print(f"Hospital 1 data shape: {hospital_data[0][0].shape}")
     

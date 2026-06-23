@@ -124,12 +124,12 @@
     <div class="shell">
         <section class="hero">
             <div class="muted">FedCare Main Server</div>
-            <h1>MNIST is prepared here first, then patient records are anonymized and routed.</h1>
+            <h1>Medical Data is prepared here first, then patient records are anonymized and routed.</h1>
             <p class="muted">
-                This page only shows what matters: whether the main server booted on MNIST, which hospitals are active, and where anonymized records were sent.
+                This page only shows what matters: whether the main server booted on Medical Data, which hospitals are active, and where anonymized records were sent.
             </p>
             <div class="stats">
-                <div class="stat"><span>MNIST bootstrap</span><strong id="mnistReady">Pending</strong></div>
+                <div class="stat"><span>Medical bootstrap</span><strong id="medicalReady">Pending</strong></div>
                 <div class="stat"><span>Active hospitals</span><strong id="activeCount">0</strong></div>
                 <div class="stat"><span>Queued processed records</span><strong id="queuedCount">0</strong></div>
             </div>
@@ -138,13 +138,13 @@
         <section class="grid">
             <div class="panel">
                 <div class="muted">Server Status</div>
-                <h2>MNIST and routing state</h2>
+                <h2>Medical Data and routing state</h2>
                 <div class="list" id="statusList"></div>
                 <div class="note">
-                    MNIST source suggestions:
-                    <a href="https://www.tensorflow.org/datasets/catalog/mnist" target="_blank" rel="noreferrer">TensorFlow MNIST catalog</a>
+                    Medical Data source suggestions:
+                    <a href="https://medmnist.com/" target="_blank" rel="noreferrer">MedMNIST catalog</a>
                     and
-                    <a href="http://yann.lecun.com/exdb/mnist/" target="_blank" rel="noreferrer">the original MNIST homepage</a>.
+                    <a href="https://github.com/MedMNIST/MedMNIST" target="_blank" rel="noreferrer">the MedMNIST GitHub</a>.
                 </div>
             </div>
 
@@ -162,6 +162,16 @@
                         <tbody id="hospitalTable"></tbody>
                     </table>
                 </div>
+            </div>
+
+            <div class="panel" style="grid-column: 1 / -1;">
+                <div class="muted">Actions</div>
+                <h2>Manual Trigger Controls</h2>
+                <div style="display: flex; gap: 10px; margin-top: 16px;">
+                    <button id="btnTrainFast" style="padding: 10px 16px; background: var(--accent); color: white; border: none; border-radius: 8px; cursor: pointer;">Train Global Model (Fast)</button>
+                    <button id="btnBroadcast" style="padding: 10px 16px; background: var(--text); color: white; border: none; border-radius: 8px; cursor: pointer;">Broadcast Weights to Hospitals</button>
+                </div>
+                <div id="actionResult" style="margin-top: 10px; font-size: 0.9em; color: var(--muted);"></div>
             </div>
 
             <div class="panel" style="grid-column: 1 / -1;">
@@ -187,7 +197,7 @@
 
     <script>
         const els = {
-            mnistReady: document.getElementById('mnistReady'),
+            medicalReady: document.getElementById('medicalReady'),
             activeCount: document.getElementById('activeCount'),
             queuedCount: document.getElementById('queuedCount'),
             statusList: document.getElementById('statusList'),
@@ -201,13 +211,13 @@
             const routes = data.route_summary?.recent_transfers || [];
             const activeHospitals = data.active_hospitals || [];
 
-            els.mnistReady.textContent = data.mnist_bootstrap?.ready ? 'Ready' : 'Pending';
+            els.medicalReady.textContent = data.medical_bootstrap?.ready ? 'Ready' : 'Pending';
             els.activeCount.textContent = activeHospitals.length;
             els.queuedCount.textContent = data.route_summary?.total_records_waiting || 0;
 
             els.statusList.innerHTML = `
-                <div><span class="muted">MNIST training samples</span><strong>${data.mnist_dataset?.train_samples || 0}</strong></div>
-                <div><span class="muted">MNIST bootstrap accuracy</span><strong>${data.mnist_bootstrap?.accuracy || 0}%</strong></div>
+                <div><span class="muted">Medical training samples</span><strong>${data.medical_dataset?.train_samples || 0}</strong></div>
+                <div><span class="muted">Medical bootstrap accuracy</span><strong>${data.medical_bootstrap?.accuracy || 0}%</strong></div>
                 <div><span class="muted">Current round</span><strong>${data.current_round}</strong></div>
                 <div><span class="muted">Latest model accuracy</span><strong>${data.training_summary?.latest_round_accuracy || 0}%</strong></div>
             `;
@@ -232,6 +242,39 @@
 
         loadData();
         setInterval(loadData, 8000);
+
+        const actionResult = document.getElementById('actionResult');
+        
+        document.getElementById('btnTrainFast').addEventListener('click', async () => {
+            actionResult.textContent = 'Training fast global model...';
+            try {
+                const res = await fetch('/train_global_model_fast', { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                    actionResult.textContent = `Success: Accuracy ${data.metrics?.accuracy}% (Loss: ${data.metrics?.loss})`;
+                    loadData();
+                } else {
+                    actionResult.textContent = `Error: ${data.error}`;
+                }
+            } catch (err) {
+                actionResult.textContent = `Error: ${err.message}`;
+            }
+        });
+
+        document.getElementById('btnBroadcast').addEventListener('click', async () => {
+            actionResult.textContent = 'Broadcasting weights...';
+            try {
+                const res = await fetch('/broadcast_weights', { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                    actionResult.textContent = 'Success: Broadcast completed.';
+                } else {
+                    actionResult.textContent = `Error: ${data.error}`;
+                }
+            } catch (err) {
+                actionResult.textContent = `Error: ${err.message}`;
+            }
+        });
     </script>
 </body>
 </html>

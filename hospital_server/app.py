@@ -33,7 +33,7 @@ from shared import (
     set_model_weights,
     setup_logger,
 )
-from shared.mnist_data import get_hospital_mnist_split
+from shared.medical_data import get_hospital_medical_split
 
 
 app = Flask(__name__)
@@ -47,6 +47,11 @@ hospital_port = int(os.getenv("PORT", os.getenv("HOSPITAL_PORT", str(HOSPITAL_SE
 local_model = None
 current_round = 0
 training_history = []
+<<<<<<< Updated upstream
+=======
+personalization_history = []  # Track personalization metrics
+zero_shot_eval_results = []   # Track zero-shot evaluation metrics
+>>>>>>> Stashed changes
 local_data = None
 local_data_summary = {}
 last_submission = None
@@ -71,9 +76,9 @@ def initialize_local_model():
     local_model = compile_model(local_model, learning_rate=LEARNING_RATE)
 
 
-def load_hospital_mnist_data(sample_count: int = 1200):
+def load_hospital_medical_data(sample_count: int = 1200):
     global local_data, local_data_summary
-    images, labels, summary = get_hospital_mnist_split(
+    images, labels, summary = get_hospital_medical_split(
         hospital_id=hospital_id,
         num_hospitals=NUM_HOSPITALS,
         sample_count=sample_count,
@@ -113,7 +118,7 @@ def ensure_registry_heartbeat():
 
 def bootstrap_hospital():
     initialize_local_model()
-    load_hospital_mnist_data()
+    load_hospital_medical_data()
     register_with_main_server()
     ensure_registry_heartbeat()
 
@@ -245,7 +250,7 @@ def health_check():
         {
             "status": "healthy",
             "hospital_id": hospital_id,
-            "mnist_loaded": local_data_summary.get("sample_count", 0) > 0,
+            "medical_loaded": local_data_summary.get("sample_count", 0) > 0,
             "timestamp": now_iso(),
         }
     ), 200
@@ -253,15 +258,58 @@ def health_check():
 
 @app.route("/configure", methods=["POST"])
 def configure():
-    global hospital_id, current_round, training_history, last_submission, received_processed_batches
+    global hospital_id, current_round, training_history, last_submission, received_processed_batches, zero_shot_eval_results
     data = request.get_json() or {}
     hospital_id = (data.get("hospital_id") or hospital_id or "hospital_1").strip()
     current_round = 0
     training_history.clear()
+    personalization_history.clear()
+    zero_shot_eval_results.clear()
     last_submission = None
     received_processed_batches = []
     bootstrap_hospital()
     return jsonify({"message": "Hospital configured", "hospital_id": hospital_id, "timestamp": now_iso()}), 200
+
+
+@app.route("/receive_global_weights", methods=["POST"])
+def receive_global_weights():
+    try:
+        data = request.get_json() or {}
+        weights_b64 = data.get("weights")
+        if not weights_b64:
+            return jsonify({"error": "No weights provided"}), 400
+            
+        import base64
+        import pickle
+        from shared.communication import ServerCommunicator
+        
+        weights = ServerCommunicator().receive_model_weights(weights_b64)
+        if weights is None:
+            return jsonify({"error": "Failed to deserialize weights"}), 400
+        
+        if local_model is None or local_data is None:
+            return jsonify({"error": "Hospital model/data not initialized"}), 400
+            
+        set_model_weights(local_model, weights)
+        
+        images, labels = local_data
+        loss, accuracy = local_model.evaluate(images, labels, verbose=0)
+        
+        result = {
+            "round": data.get("round", "unknown"),
+            "loss": float(loss),
+            "accuracy": float(accuracy * 100),
+            "samples": len(images),
+            "timestamp": now_iso()
+        }
+        
+        zero_shot_eval_results.append(result)
+            
+        return jsonify({"message": "Weights received and evaluated", "metrics": result}), 200
+        
+    except Exception as exc:
+        logger.error("Error receiving global weights: %s", exc)
+        return jsonify({"error": str(exc)}), 500
 
 
 @app.route("/upload_patient_records", methods=["POST"])
@@ -360,7 +408,7 @@ def get_dashboard_data():
     return jsonify(
         {
             "hospital_id": hospital_id,
-            "mnist": {
+            "medical": {
                 "loaded": local_data_summary.get("sample_count", 0) > 0,
                 "sample_count": local_data_summary.get("sample_count", 0),
                 "label_distribution": local_data_summary.get("label_distribution", {}),
@@ -373,6 +421,8 @@ def get_dashboard_data():
                 "history": received_processed_batches[-12:],
             },
             "training": training_history[-6:],
+            "personalization_history": personalization_history[-6:],
+            "zero_shot_eval_results": zero_shot_eval_results[-6:],
             "main_server_url": get_main_server_base_url(),
             "timestamp": now_iso(),
         }

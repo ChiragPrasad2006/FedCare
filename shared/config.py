@@ -22,7 +22,7 @@ BATCH_SIZE = int(os.getenv("BATCH_SIZE", 32))
 TEST_SIZE = float(os.getenv("TEST_SIZE", 0.2))
 
 # Model Configuration
-INPUT_SHAPE = (28, 28, 1)  # MNIST-like data
+INPUT_SHAPE = (28, 28, 3)  # Medical data (MedMNIST RGB)
 NUM_CLASSES = 10
 LEARNING_RATE = float(os.getenv("LEARNING_RATE", 0.001))
 

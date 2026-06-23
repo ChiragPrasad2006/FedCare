@@ -18,6 +18,7 @@ services:
       - ./logs:/app/logs
       - ./main_server:/app/main_server
       - ./shared:/app/shared
+      - ./data:/app/data
     networks:
       - fedcare-network
     restart: unless-stopped
@@ -39,6 +40,7 @@ services:
       - ./logs:/app/logs
       - ./hospital_server:/app/hospital_server
       - ./shared:/app/shared
+      - ./data:/app/data
     networks:
       - fedcare-network
     depends_on:
@@ -62,6 +64,7 @@ services:
       - ./logs:/app/logs
       - ./hospital_server:/app/hospital_server
       - ./shared:/app/shared
+      - ./data:/app/data
     networks:
       - fedcare-network
     depends_on:
@@ -85,6 +88,7 @@ services:
       - ./logs:/app/logs
       - ./hospital_server:/app/hospital_server
       - ./shared:/app/shared
+      - ./data:/app/data
     networks:
       - fedcare-network
     depends_on:

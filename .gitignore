@@ -1,6 +1,31 @@
+# Python virtual environments
 venv/
-.venv310/
+.venv*/
+env/
+.env/
+
+# Python cache files
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Logs and databases
 logs/
+*.log
+*.sqlite3
+
+# IDEs and OS files
+.idea/
+.vscode/
+.DS_Store
+*.swp
 *.tar
+
+# Environment variables
+.env
+.env.local
+
+# NOTE: The /data directory is intentionally NOT ignored 
+# because the MedMNIST dataset needs to be pushed to GitHub 
+# so it's present when cloning to another laptop.

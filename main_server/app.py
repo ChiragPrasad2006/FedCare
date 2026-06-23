@@ -28,7 +28,7 @@ from shared import (
     setup_logger,
     HOSPITAL_REGISTRY_TTL_SECONDS,
 )
-from shared.mnist_data import bootstrap_model_on_mnist, mnist_dataset_status
+from shared.medical_data import bootstrap_model_on_medical_data, medical_dataset_status
 from shared.privacy import analyze_and_anonymize_records
 
 
@@ -43,9 +43,9 @@ training_metrics = []
 processed_record_routes = {}
 transfer_history = []
 active_hospitals = {}
-mnist_bootstrap = {
+medical_bootstrap = {
     "ready": False,
-    "dataset": "MNIST",
+    "dataset": "Medical Data",
     "sample_count": 0,
     "accuracy": 0.0,
     "loss": 0.0,
@@ -60,19 +60,19 @@ def now_iso() -> str:
 
 
 def initialize_global_model():
-    """Initialize and warm-start the global model with MNIST."""
-    global global_model, mnist_bootstrap
+    """Initialize and warm-start the global model with Medical Data."""
+    global global_model, medical_bootstrap
     logger.info("Initializing global model")
     global_model = create_federated_model()
     global_model = compile_model(global_model, learning_rate=LEARNING_RATE)
     try:
-        mnist_bootstrap = bootstrap_model_on_mnist(global_model)
-        mnist_bootstrap["ready"] = True
-        mnist_bootstrap["timestamp"] = now_iso()
+        medical_bootstrap = bootstrap_model_on_medical_data(global_model)
+        medical_bootstrap["ready"] = True
+        medical_bootstrap["timestamp"] = now_iso()
     except Exception as exc:
-        mnist_bootstrap = {
+        medical_bootstrap = {
             "ready": False,
-            "dataset": "MNIST",
+            "dataset": "Medical Data",
             "sample_count": 0,
             "accuracy": 0.0,
             "loss": 0.0,
@@ -80,7 +80,7 @@ def initialize_global_model():
             "error": str(exc),
             "timestamp": now_iso(),
         }
-        logger.error("MNIST bootstrap failed: %s", exc)
+        logger.error("Medical Data bootstrap failed: %s", exc)
 
 
 def ensure_model_ready():
@@ -188,7 +188,7 @@ def health_check():
         {
             "status": "healthy",
             "timestamp": now_iso(),
-            "mnist_ready": mnist_bootstrap["ready"],
+            "medical_ready": medical_bootstrap["ready"],
             "current_round": current_round,
         }
     ), 200
@@ -224,6 +224,56 @@ def get_global_model():
         return jsonify({"weights": weights_b64, "round": current_round, "timestamp": now_iso()}), 200
     except Exception as exc:
         logger.error("Error retrieving global model: %s", exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/train_global_model_fast", methods=["POST"])
+def train_global_model_fast():
+    ensure_model_ready()
+    try:
+        from shared.medical_data import bootstrap_model_on_medical_data
+        with lock:
+            result = bootstrap_model_on_medical_data(global_model, sample_count=300, epochs=1)
+        return jsonify({"message": "Fast training completed", "metrics": result}), 200
+    except Exception as exc:
+        logger.error("Fast training failed: %s", exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/broadcast_weights", methods=["POST"])
+def broadcast_weights():
+    ensure_model_ready()
+    try:
+        import base64
+        import pickle
+        import requests
+
+        weights = get_model_weights(global_model)
+        weights_b64 = base64.b64encode(pickle.dumps(weights)).decode("utf-8")
+        
+        results = {}
+        for hospital_id in active_hospital_ids():
+            hospital_url = active_hospitals[hospital_id].get("server_url", "")
+            if not hospital_url:
+                results[hospital_id] = {"status": "no_url"}
+                continue
+            
+            try:
+                response = requests.post(
+                    f"{hospital_url}/receive_global_weights",
+                    json={"weights": weights_b64, "round": current_round},
+                    timeout=15
+                )
+                if response.status_code == 200:
+                    results[hospital_id] = response.json()
+                else:
+                    results[hospital_id] = {"error": f"Status {response.status_code}"}
+            except Exception as e:
+                results[hospital_id] = {"error": str(e)}
+                
+        return jsonify({"message": "Broadcast completed", "results": results}), 200
+    except Exception as exc:
+        logger.error("Broadcast failed: %s", exc)
         return jsonify({"error": str(exc)}), 500
 
 
@@ -329,8 +379,8 @@ def get_dashboard_data():
     ensure_model_ready()
     return jsonify(
         {
-            "mnist_bootstrap": mnist_bootstrap,
-            "mnist_dataset": mnist_dataset_status(),
+            "medical_bootstrap": medical_bootstrap,
+            "medical_dataset": medical_dataset_status(),
             "active_hospitals": [active_hospitals[hospital_id] for hospital_id in active_hospital_ids()],
             "route_summary": summarize_routes(),
             "training_summary": summarize_metrics(),

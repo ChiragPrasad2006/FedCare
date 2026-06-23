@@ -221,7 +221,7 @@ def main():
     import sys
     sys.path.insert(0, '.')
     
-    from data_simulation.data_generator import load_and_split_mnist_data
+    from data_simulation.data_generator import load_and_split_medical_data
     
     # Configuration
     MAIN_SERVER_URL = "http://localhost:5000"
@@ -253,8 +253,8 @@ def main():
         return
     
     # Generate and load data
-    logger.info("Generating MNIST data...")
-    hospital_data, test_data = load_and_split_mnist_data(num_hospitals=NUM_HOSPITALS)
+    logger.info("Generating Medical data...")
+    hospital_data, test_data = load_and_split_medical_data(num_hospitals=NUM_HOSPITALS)
     
     if not orchestrator.load_hospital_data(hospital_data):
         logger.error("Failed to load hospital data")

@@ -11,7 +11,7 @@ import os
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from data_simulation.data_generator import load_and_split_mnist_data, create_non_iid_data
+from data_simulation.data_generator import load_and_split_medical_data, create_non_iid_data
 from orchestrator import FederatedLearningOrchestrator
 
 def example_basic_flow():
@@ -59,7 +59,7 @@ def example_basic_flow():
         
         # 4. Generate and load data
         print("\n4. Generating and loading training data...")
-        hospital_data, test_data = load_and_split_mnist_data(num_hospitals=3)
+        hospital_data, test_data = load_and_split_medical_data(num_hospitals=3)
         
         for i, (X_train, y_train) in enumerate(hospital_data):
             print(f"   Loading data into hospital_{i+1}...")
@@ -233,7 +233,7 @@ def example_orchestrator():
         
         # Load data
         print("\n2. Loading training data...")
-        hospital_data, test_data = load_and_split_mnist_data(num_hospitals=3)
+        hospital_data, test_data = load_and_split_medical_data(num_hospitals=3)
         if not orchestrator.load_hospital_data(hospital_data):
             print("   ✗ Failed to load data")
             return
