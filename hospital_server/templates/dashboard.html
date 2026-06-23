@@ -226,6 +226,50 @@
                 </div>
             </div>
         </section>
+
+        <section class="grid" style="grid-template-columns: 1fr; margin-top: 18px;">
+            <div class="panel">
+                <div class="muted">Training</div>
+                <h2>Local Models</h2>
+                
+                <div class="form-grid">
+                    <div>
+                        <h3 style="margin-top: 0; margin-bottom: 8px;">Standard Federated Training</h3>
+                        <div class="table-wrap" style="margin-top: 0;">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Round</th>
+                                        <th>Accuracy</th>
+                                        <th>Loss</th>
+                                        <th>Samples</th>
+                                        <th>Time</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="trainingTable"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 style="margin-top: 0; margin-bottom: 8px;">Personalized Models (FedProx)</h3>
+                        <div class="table-wrap" style="margin-top: 0;">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Round</th>
+                                        <th>Accuracy</th>
+                                        <th>Loss</th>
+                                        <th>Samples</th>
+                                        <th>Time</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="personalizationTable"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
     </div>
 
     <script>
@@ -240,7 +284,9 @@
             submissionList: document.getElementById('submissionList'),
             previewTable: document.getElementById('previewTable'),
             receivedSummary: document.getElementById('receivedSummary'),
-            receivedTable: document.getElementById('receivedTable')
+            receivedTable: document.getElementById('receivedTable'),
+            trainingTable: document.getElementById('trainingTable'),
+            personalizationTable: document.getElementById('personalizationTable')
         };
 
         function showMessage(text, isError = false) {
@@ -275,6 +321,30 @@
             `).join('') : '<tr><td colspan="4">No processed records received yet.</td></tr>';
         }
 
+        function renderTraining(history) {
+            els.trainingTable.innerHTML = history.length ? history.slice().reverse().map((round) => `
+                <tr>
+                    <td>${round.round}</td>
+                    <td>${(round.metrics.accuracy * 100).toFixed(2)}%</td>
+                    <td>${round.metrics.loss.toFixed(4)}</td>
+                    <td>${round.metrics.samples}</td>
+                    <td>${new Date(round.timestamp).toLocaleTimeString()}</td>
+                </tr>
+            `).join('') : '<tr><td colspan="5">No standard training history yet.</td></tr>';
+        }
+
+        function renderPersonalization(history) {
+            els.personalizationTable.innerHTML = history.length ? history.slice().reverse().map((round) => `
+                <tr>
+                    <td>${round.round}</td>
+                    <td>${(round.metrics.accuracy * 100).toFixed(2)}%</td>
+                    <td>${round.metrics.loss.toFixed(4)}</td>
+                    <td>${round.metrics.samples}</td>
+                    <td>${new Date(round.timestamp).toLocaleTimeString()}</td>
+                </tr>
+            `).join('') : '<tr><td colspan="5">No personalized models yet.</td></tr>';
+        }
+
         async function refreshDashboard() {
             const response = await fetch('/dashboard_data');
             const data = await response.json();
@@ -305,6 +375,17 @@
                 ['New records on last refresh', data.received?.new_record_count || 0]
             ]);
             renderReceived(data.received?.history || []);
+            renderTraining(data.training || []);
+
+            try {
+                const pRes = await fetch('/personalization_history?limit=6');
+                if (pRes.ok) {
+                    const pData = await pRes.json();
+                    renderPersonalization(pData.personalization_history || []);
+                }
+            } catch (e) {
+                console.error('Failed to load personalization history:', e);
+            }
         }
 
         document.getElementById('saveBtn').addEventListener('click', async () => {
