@@ -87,12 +87,13 @@ def load_hospital_medical_data(sample_count: int = 1200):
 
 def register_with_main_server():
     try:
-        # Register with the actual server URL using localhost
+        # Register with the actual server URL using the correct host
+        hospital_host = os.getenv("HOSPITAL_HOST", "localhost")
         requests.post(
             f"{get_main_server_base_url()}/register_hospital",
             json={
                 "hospital_id": hospital_id,
-                "server_url": f"http://localhost:{hospital_port}",
+                "server_url": f"http://{hospital_host}:{hospital_port}",
             },
             timeout=10,
         )
@@ -318,8 +319,13 @@ def upload_patient_records():
             request.form.get("destination_hospital_id")
             if request.files
             else (request.get_json() or {}).get("destination_hospital_id", "")
-        ).strip()
+        )
+        if destination_hospital_id is None:
+            destination_hospital_id = ""
+        destination_hospital_id = destination_hospital_id.strip()
         records = parse_uploaded_records()
+
+        logger.error(f"DEBUG: dest={destination_hospital_id}, type_records={type(records)}, len_records={len(records) if isinstance(records, list) else 0}")
 
         if not destination_hospital_id:
             return jsonify({"error": "destination_hospital_id is required"}), 400
@@ -372,21 +378,74 @@ def sync_and_train():
     return jsonify({"message": "Training completed", "metrics": metrics, "round": current_round}), 200
 
 
+@app.route("/personalize_fedprox", methods=["POST"])
+def personalize_fedprox():
+    global current_round
+    if not fetch_global_model():
+        return jsonify({"error": "Failed to fetch global model"}), 500
+        
+    if local_model is None or local_data is None:
+        return jsonify({"error": "Local model/data not ready"}), 500
+        
+    from shared.models import train_with_fedprox, get_model_weights
+    
+    images, labels = local_data
+    global_weights = get_model_weights(local_model)
+    
+    try:
+        metrics = train_with_fedprox(
+            model=local_model,
+            X_train=images,
+            y_train=labels,
+            global_weights=global_weights,
+            epochs=EPOCHS_PER_ROUND,
+            batch_size=BATCH_SIZE,
+            learning_rate=LEARNING_RATE
+        )
+        
+        metrics["samples"] = len(images)
+        personalization_history.append({"round": current_round, "metrics": metrics, "timestamp": now_iso()})
+        current_round += 1
+        
+        return jsonify({"message": "Personalization completed", "metrics": metrics, "round": current_round}), 200
+    except Exception as exc:
+        logger.error("Error in personalize_fedprox: %s", exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/evaluate_global_model", methods=["POST"])
+def evaluate_global_model():
+    if not fetch_global_model():
+        return jsonify({"error": "Failed to fetch global model"}), 500
+        
+    if local_model is None or local_data is None:
+        return jsonify({"error": "Local model/data not ready"}), 500
+        
+    try:
+        images, labels = local_data
+        loss, accuracy = local_model.evaluate(images, labels, verbose=0)
+        
+        result = {
+            "round": current_round,
+            "loss": float(loss),
+            "accuracy": float(accuracy * 100),
+            "samples": len(images),
+            "timestamp": now_iso()
+        }
+        
+        zero_shot_eval_results.append(result)
+        
+        return jsonify({"message": "Evaluated global model", "metrics": result}), 200
+    except Exception as exc:
+        logger.error("Error evaluating global model: %s", exc)
+        return jsonify({"error": str(exc)}), 500
+
+
 @app.route("/retrieve_patient_data", methods=["POST"])
 def retrieve_patient_data():
-    """Retrieve patient data from main server for presentation/viewing purposes (non-consuming)"""
+    """Retrieve patient data from locally consumed batches for presentation/viewing purposes"""
     try:
-        register_with_main_server()
-        response = requests.get(
-            f"{get_main_server_base_url()}/processed_records/{hospital_id}?consume=false",
-            timeout=15,
-        )
-        if response.status_code != 200:
-            return jsonify({"error": "Failed to retrieve data from main server"}), 500
-        
-        payload = response.json()
-        batches = payload.get("batches", [])
-        
+        batches = received_processed_batches
         return jsonify({
             "hospital_id": hospital_id,
             "batch_count": len(batches),

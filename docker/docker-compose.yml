@@ -3,7 +3,7 @@ version: '3.8'
 services:
   main-server:
     build:
-      context: .
+      context: ..
       dockerfile: docker/Dockerfile.main_server
     container_name: fedcare-main-server
     ports:
@@ -15,17 +15,17 @@ services:
       - NUM_HOSPITALS=3
       - LOG_LEVEL=INFO
     volumes:
-      - ./logs:/app/logs
-      - ./main_server:/app/main_server
-      - ./shared:/app/shared
-      - ./data:/app/data
+      - ../logs:/app/logs
+      - ../main_server:/app/main_server
+      - ../shared:/app/shared
+      - ../data:/app/data
     networks:
       - fedcare-network
     restart: unless-stopped
 
   hospital-server-1:
     build:
-      context: .
+      context: ..
       dockerfile: docker/Dockerfile.hospital_server
     container_name: fedcare-hospital-1
     ports:
@@ -33,14 +33,15 @@ services:
     environment:
       - PORT=5001
       - HOSPITAL_ID=hospital_1
+      - HOSPITAL_HOST=fedcare-hospital-1
       - MAIN_SERVER_HOST=main-server
       - MAIN_SERVER_PORT=5000
       - LOG_LEVEL=INFO
     volumes:
-      - ./logs:/app/logs
-      - ./hospital_server:/app/hospital_server
-      - ./shared:/app/shared
-      - ./data:/app/data
+      - ../logs:/app/logs
+      - ../hospital_server:/app/hospital_server
+      - ../shared:/app/shared
+      - ../data:/app/data
     networks:
       - fedcare-network
     depends_on:
@@ -49,7 +50,7 @@ services:
 
   hospital-server-2:
     build:
-      context: .
+      context: ..
       dockerfile: docker/Dockerfile.hospital_server
     container_name: fedcare-hospital-2
     ports:
@@ -57,14 +58,15 @@ services:
     environment:
       - PORT=5002
       - HOSPITAL_ID=hospital_2
+      - HOSPITAL_HOST=fedcare-hospital-2
       - MAIN_SERVER_HOST=main-server
       - MAIN_SERVER_PORT=5000
       - LOG_LEVEL=INFO
     volumes:
-      - ./logs:/app/logs
-      - ./hospital_server:/app/hospital_server
-      - ./shared:/app/shared
-      - ./data:/app/data
+      - ../logs:/app/logs
+      - ../hospital_server:/app/hospital_server
+      - ../shared:/app/shared
+      - ../data:/app/data
     networks:
       - fedcare-network
     depends_on:
@@ -73,7 +75,7 @@ services:
 
   hospital-server-3:
     build:
-      context: .
+      context: ..
       dockerfile: docker/Dockerfile.hospital_server
     container_name: fedcare-hospital-3
     ports:
@@ -81,14 +83,15 @@ services:
     environment:
       - PORT=5003
       - HOSPITAL_ID=hospital_3
+      - HOSPITAL_HOST=fedcare-hospital-3
       - MAIN_SERVER_HOST=main-server
       - MAIN_SERVER_PORT=5000
       - LOG_LEVEL=INFO
     volumes:
-      - ./logs:/app/logs
-      - ./hospital_server:/app/hospital_server
-      - ./shared:/app/shared
-      - ./data:/app/data
+      - ../logs:/app/logs
+      - ../hospital_server:/app/hospital_server
+      - ../shared:/app/shared
+      - ../data:/app/data
     networks:
       - fedcare-network
     depends_on:

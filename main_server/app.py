@@ -247,7 +247,6 @@ def train_global_model_fast():
         logger.error("Fast training failed: %s", exc)
         return jsonify({"error": str(exc)}), 500
 
-
 @app.route("/broadcast_weights", methods=["POST"])
 def broadcast_weights():
     ensure_model_ready()

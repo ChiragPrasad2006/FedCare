@@ -175,6 +175,13 @@ kubectl port-forward -n fedcare svc/hospital-server-1 5001:5001
 kubectl port-forward -n fedcare svc/hospital-server-2 5002:5001
 ```
 
+or 
+
+``bash
+docker-compose -f docker/docker-compose.yml down
+docker-compose -f docker/docker-compose.yml up --build
+```
+
 Open:
 
 - `http://localhost:5000/`

@@ -48,11 +48,17 @@ def ensure_medical_data_loaded() -> Dict[str, tuple]:
             
             train_dataset = DataClass(split='train', download=True, root=data_root)
             test_dataset = DataClass(split='test', download=True, root=data_root)
-            
             train_images = train_dataset.imgs
             train_labels = train_dataset.labels.squeeze()
             test_images = test_dataset.imgs
             test_labels = test_dataset.labels.squeeze()
+            
+            # Shuffle training data to ensure balanced class distribution across splits and bootstrap
+            np.random.seed(42)
+            indices = np.arange(len(train_images))
+            np.random.shuffle(indices)
+            train_images = train_images[indices]
+            train_labels = train_labels[indices]
             
             channels = info['n_channels']
             _MEDICAL_CACHE["train_images"] = _normalize_images(train_images, channels)

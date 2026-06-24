@@ -17,7 +17,7 @@ HOSPITAL_REGISTRY_TTL_SECONDS = int(os.getenv("HOSPITAL_REGISTRY_TTL_SECONDS", 3
 # Federated Learning Configuration
 NUM_ROUNDS = int(os.getenv("NUM_ROUNDS", 10))
 NUM_HOSPITALS = int(os.getenv("NUM_HOSPITALS", 3))
-EPOCHS_PER_ROUND = int(os.getenv("EPOCHS_PER_ROUND", 5))
+EPOCHS_PER_ROUND = int(os.getenv("EPOCHS_PER_ROUND", 10))
 BATCH_SIZE = int(os.getenv("BATCH_SIZE", 32))
 TEST_SIZE = float(os.getenv("TEST_SIZE", 0.2))
 

@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en">
+
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -16,75 +17,117 @@
             --soft: #edf8f4;
             --shadow: 0 18px 42px rgba(20, 63, 50, 0.08);
         }
-        * { box-sizing: border-box; }
+
+        * {
+            box-sizing: border-box;
+        }
+
         body {
             margin: 0;
             font-family: "Segoe UI", sans-serif;
             color: var(--text);
             background: linear-gradient(180deg, #fbfdfc 0%, #eef5f1 100%);
         }
+
         .shell {
             max-width: 1080px;
             margin: 0 auto;
             padding: 28px 18px 40px;
         }
-        .hero, .panel {
+
+        .hero,
+        .panel {
             background: var(--surface);
             border: 1px solid var(--line);
             border-radius: 20px;
             box-shadow: var(--shadow);
         }
+
         .hero {
             padding: 28px;
             margin-bottom: 18px;
         }
+
         .hero h1 {
             margin: 6px 0 10px;
             font-size: clamp(2rem, 4vw, 3rem);
             line-height: 1;
             letter-spacing: -0.04em;
         }
-        .muted, label, th { color: var(--muted); }
-        .stats, .grid, .form-grid {
+
+        .muted,
+        label,
+        th {
+            color: var(--muted);
+        }
+
+        .stats,
+        .grid,
+        .form-grid {
             display: grid;
             gap: 14px;
         }
+
         .stats {
             grid-template-columns: repeat(3, minmax(0, 1fr));
             margin-top: 18px;
         }
+
         .stat {
             background: var(--soft);
             border: 1px solid var(--line);
             border-radius: 16px;
             padding: 16px;
         }
+
         .stat strong {
             display: block;
             font-size: 1.6rem;
             margin-top: 6px;
         }
-        .grid { grid-template-columns: 1.15fr 0.85fr; }
-        .panel { padding: 22px; }
+
+        .grid {
+            grid-template-columns: 1.15fr 0.85fr;
+        }
+
+        .grid>.panel {
+            min-width: 0;
+        }
+
+        .panel {
+            padding: 22px;
+        }
+
         .panel h2 {
             margin: 4px 0 0;
             font-size: 1.15rem;
         }
+
         .form-grid {
             grid-template-columns: 1fr 1fr;
             margin-top: 16px;
         }
-        input, select, button {
+
+        .form-grid>div {
+            min-width: 0;
+        }
+
+        input,
+        select,
+        button {
             width: 100%;
             font: inherit;
             border-radius: 14px;
         }
-        input, select {
+
+        input,
+        select {
             padding: 12px 14px;
             border: 1px solid var(--line);
             background: white;
             color: var(--text);
         }
+
         button {
             margin-top: 16px;
             padding: 13px 16px;
@@ -94,12 +137,17 @@
             font-weight: 700;
             cursor: pointer;
         }
-        .secondary { background: var(--accent-2); }
+
+        .secondary {
+            background: var(--accent-2);
+        }
+
         .list {
             display: grid;
             gap: 10px;
             margin-top: 16px;
         }
+
         .list div {
             display: flex;
             justify-content: space-between;
@@ -107,28 +155,34 @@
             padding: 10px 0;
             border-bottom: 1px solid var(--line);
         }
+
         .table-wrap {
             overflow: auto;
             margin-top: 16px;
             border: 1px solid var(--line);
             border-radius: 16px;
         }
+
         table {
             width: 100%;
             border-collapse: collapse;
             min-width: 520px;
         }
-        th, td {
+
+        th,
+        td {
             text-align: left;
             padding: 12px 14px;
             border-bottom: 1px solid var(--line);
             vertical-align: top;
         }
+
         th {
             font-size: 0.78rem;
             text-transform: uppercase;
             letter-spacing: 0.08em;
         }
+
         .message {
             display: none;
             margin-top: 16px;
@@ -137,6 +191,7 @@
             background: var(--soft);
             border: 1px solid var(--line);
         }
+
         .note {
             margin-top: 16px;
             padding: 14px 16px;
@@ -144,7 +199,11 @@
             background: var(--soft);
             border: 1px solid var(--line);
         }
-        a { color: var(--accent-2); }
+
+        a {
+            color: var(--accent-2);
+        }
+
         .record-detail {
             font-size: 0.9rem;
             max-height: 150px;
@@ -155,6 +214,7 @@
             white-space: pre-wrap;
             word-break: break-all;
         }
+
         .batch-header {
             background: var(--soft);
             padding: 12px;
@@ -162,18 +222,27 @@
             margin-bottom: 12px;
             border-left: 4px solid var(--accent);
         }
+
         @media (max-width: 860px) {
-            .stats, .grid, .form-grid { grid-template-columns: 1fr; }
+
+            .stats,
+            .grid,
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
+
 <body>
     <div class="shell">
         <section class="hero">
             <div class="muted">FedCare Hospital Server</div>
-            <h1>Upload patient records, choose the destination hospital, and let the main server strip private data.</h1>
+            <h1>Upload patient records, choose the destination hospital, and let the main server strip private data.
+            </h1>
             <p class="muted">
-                Medical Data is already loaded for this hospital in the background. The only action here is selecting the target hospital and uploading the patient file.
+                Medical Data is already loaded for this hospital in the background. The only action here is selecting
+                the target hospital and uploading the patient file.
             </p>
             <div class="stats">
                 <div class="stat"><span>Hospital</span><strong id="hospitalId">{{ default_hospital_id }}</strong></div>
@@ -181,6 +250,74 @@
                 <div class="stat"><span>Received processed records</span><strong id="receivedCount">0</strong></div>
             </div>
             <div id="messageBox" class="message"></div>
+        </section>
+
+        <section class="panel" style="margin-top: 18px;">
+            <div class="muted">Training</div>
+            <h2>Local Models</h2>
+
+            <div style="display: flex; gap: 10px; margin-top: 12px; margin-bottom: 12px;">
+                <button id="syncTrainBtn" style="width: auto; margin-top: 0; padding: 8px 16px;">Sync & Train
+                    Local Model</button>
+                <button id="personalizeBtn" style="width: auto; margin-top: 0; padding: 8px 16px;"
+                    class="secondary">Personalize Local Model</button>
+            </div>
+
+            <div class="form-grid">
+                <div>
+                    <h3 style="margin-top: 0; margin-bottom: 8px;">Standard Federated Training</h3>
+                    <div class="table-wrap" style="margin-top: 0;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Round</th>
+                                    <th>Accuracy</th>
+                                    <th>Loss</th>
+                                    <th>Samples</th>
+                                    <th>Time</th>
+                                </tr>
+                            </thead>
+                            <tbody id="trainingTable"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div>
+                    <h3 style="margin-top: 0; margin-bottom: 8px;">Personalized Models (FedProx)</h3>
+                    <div class="table-wrap" style="margin-top: 0;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Round</th>
+                                    <th>Accuracy</th>
+                                    <th>Loss</th>
+                                    <th>Samples</th>
+                                    <th>Time</th>
+                                </tr>
+                            </thead>
+                            <tbody id="personalizationTable"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 24px; display: none;">
+                <h3 style="margin-top: 0; margin-bottom: 8px;">Zero-Shot Global Model Evaluation (Broadcasted
+                    Weights)</h3>
+                <div class="table-wrap" style="margin-top: 0;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Round</th>
+                                <th>Accuracy</th>
+                                <th>Loss</th>
+                                <th>Samples Evaluated</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="zeroShotTable"></tbody>
+                    </table>
+                </div>
+            </div>
         </section>
 
         <section class="grid">
@@ -204,11 +341,13 @@
                 <button id="saveBtn" class="secondary">Save hospital id</button>
                 <button id="uploadBtn">Upload and route</button>
                 <div class="note">
-                    Use a JSON array or CSV file of patient records. Example files can be placed in the repo and uploaded directly.
+                    Use a JSON array or CSV file of patient records. Example files can be placed in the repo and
+                    uploaded directly.
                     For Medical Data source files, use
                     <a href="https://medmnist.com/" target="_blank" rel="noreferrer">MedMNIST catalog</a>
                     or
-                    <a href="https://github.com/MedMNIST/MedMNIST" target="_blank" rel="noreferrer">the MedMNIST GitHub</a>.
+                    <a href="https://github.com/MedMNIST/MedMNIST" target="_blank" rel="noreferrer">the MedMNIST
+                        GitHub</a>.
                 </div>
                 <div class="list" id="submissionList"></div>
                 <div class="table-wrap">
@@ -223,6 +362,7 @@
                     </table>
                 </div>
             </div>
+
 
             <div class="panel">
                 <div class="muted">Received</div>
@@ -244,6 +384,7 @@
             </div>
         </section>
 
+
         <section class="panel" style="margin-top: 18px;">
             <div class="muted">Browse</div>
             <h2>View received patient data in detail</h2>
@@ -256,72 +397,7 @@
             <div id="dataViewContainer"></div>
         </section>
 
-        <section class="grid" style="grid-template-columns: 1fr; margin-top: 18px;">
-            <div class="panel">
-                <div class="muted">Training</div>
-                <h2>Local Models</h2>
-                
-                <div style="display: flex; gap: 10px; margin-top: 12px; margin-bottom: 12px;">
-                    <button id="syncTrainBtn" style="width: auto; margin-top: 0; padding: 8px 16px;">Sync & Train Global Model</button>
-                    <button id="personalizeBtn" style="width: auto; margin-top: 0; padding: 8px 16px;" class="secondary">Personalize Local Model</button>
-                </div>
-                
-                <div class="form-grid">
-                    <div>
-                        <h3 style="margin-top: 0; margin-bottom: 8px;">Standard Federated Training</h3>
-                        <div class="table-wrap" style="margin-top: 0;">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Round</th>
-                                        <th>Accuracy</th>
-                                        <th>Loss</th>
-                                        <th>Samples</th>
-                                        <th>Time</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="trainingTable"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <div>
-                        <h3 style="margin-top: 0; margin-bottom: 8px;">Personalized Models (FedProx)</h3>
-                        <div class="table-wrap" style="margin-top: 0;">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Round</th>
-                                        <th>Accuracy</th>
-                                        <th>Loss</th>
-                                        <th>Samples</th>
-                                        <th>Time</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="personalizationTable"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
 
-                <div style="margin-top: 24px;">
-                    <h3 style="margin-top: 0; margin-bottom: 8px;">Zero-Shot Global Model Evaluation (Broadcasted Weights)</h3>
-                    <div class="table-wrap" style="margin-top: 0;">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Round</th>
-                                    <th>Accuracy</th>
-                                    <th>Loss</th>
-                                    <th>Samples Evaluated</th>
-                                    <th>Time</th>
-                                </tr>
-                            </thead>
-                            <tbody id="zeroShotTable"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </section>
     </div>
 
     <script>
@@ -345,7 +421,8 @@
             personalizationTable: document.getElementById('personalizationTable'),
             zeroShotTable: document.getElementById('zeroShotTable'),
             syncTrainBtn: document.getElementById('syncTrainBtn'),
-            personalizeBtn: document.getElementById('personalizeBtn')
+            personalizeBtn: document.getElementById('personalizeBtn'),
+            evalGlobalBtn: document.getElementById('evalGlobalBtn')
         };
 
         // Holds the last-retrieved batches so they can be downloaded
@@ -390,11 +467,11 @@
             }
 
             let html = '<div style="margin-top: 16px;">';
-            
+
             batches.forEach((batch, batchIdx) => {
                 const records = batch.records || [];
                 const privacySummary = batch.privacy_summary || {};
-                
+
                 html += `
                     <div class="batch-header">
                         <strong>Batch ${batchIdx + 1}</strong> from ${batch.source_hospital_id}
@@ -411,7 +488,7 @@
                             </thead>
                             <tbody>
                 `;
-                
+
                 records.forEach((record, recordIdx) => {
                     const recordJson = typeof record === 'string' ? record : JSON.stringify(record, null, 2);
                     html += `
@@ -421,14 +498,14 @@
                         </tr>
                     `;
                 });
-                
+
                 html += `
                             </tbody>
                         </table>
                     </div>
                 `;
             });
-            
+
             html += '</div>';
             els.dataViewContainer.innerHTML = html;
         }
@@ -449,6 +526,30 @@
                     <td>${new Date(round.timestamp).toLocaleTimeString()}</td>
                 </tr>
             `).join('') : '<tr><td colspan="5">No broadcasted weights evaluated yet.</td></tr>';
+        }
+
+        function renderTraining(history) {
+            els.trainingTable.innerHTML = history.length ? history.slice().reverse().map((round) => `
+                <tr>
+                    <td>${round.round}</td>
+                    <td>${(round.metrics.accuracy * 100).toFixed(2)}%</td>
+                    <td>${round.metrics.loss.toFixed(4)}</td>
+                    <td>${round.metrics.samples}</td>
+                    <td>${new Date(round.timestamp).toLocaleTimeString()}</td>
+                </tr>
+            `).join('') : '<tr><td colspan="5">No standard training history.</td></tr>';
+        }
+
+        function renderPersonalization(history) {
+            els.personalizationTable.innerHTML = history.length ? history.slice().reverse().map((round) => `
+                <tr>
+                    <td>${round.round}</td>
+                    <td>${(round.metrics.accuracy * 100).toFixed(2)}%</td>
+                    <td>${round.metrics.loss.toFixed(4)}</td>
+                    <td>${round.metrics.samples}</td>
+                    <td>${new Date(round.timestamp).toLocaleTimeString()}</td>
+                </tr>
+            `).join('') : '<tr><td colspan="5">No personalized training history.</td></tr>';
         }
 
         async function refreshDashboard() {
@@ -528,14 +629,14 @@
             try {
                 els.retrieveMessage.style.display = 'none';
                 els.dataViewContainer.innerHTML = '<div class="note">Loading patient data...</div>';
-                
+
                 const response = await fetch('/retrieve_patient_data', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
                 const payload = await response.json();
                 if (!response.ok) throw new Error(payload.error || 'Failed to retrieve data');
-                
+
                 const batches = payload.batches || [];
                 if (batches.length === 0) {
                     lastRetrievedBatches = null;
@@ -603,10 +704,10 @@
             try {
                 els.personalizeBtn.textContent = 'Personalizing...';
                 els.personalizeBtn.disabled = true;
-                const response = await fetch('/personalize_fedprox', { 
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' }, 
-                    body: JSON.stringify({}) 
+                const response = await fetch('/personalize_fedprox', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
                 });
                 const payload = await response.json();
                 if (!response.ok) throw new Error(payload.error || 'Personalization failed');
@@ -620,8 +721,10 @@
             }
         });
 
+
         refreshDashboard();
         setInterval(refreshDashboard, 8000);
     </script>
 </body>
+
 </html>

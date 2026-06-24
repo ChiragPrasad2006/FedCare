@@ -28,9 +28,16 @@ def create_federated_model(input_shape=(28, 28, 3), num_classes=10, l2_reg=0.000
         layers.MaxPooling2D((2, 2)),
         layers.Dropout(0.25),
         
+        # Conv block 3
+        layers.Conv2D(128, (3, 3), padding='same', kernel_regularizer=keras.regularizers.l2(l2_reg)),
+        layers.BatchNormalization(),
+        layers.Activation('relu'),
+        layers.MaxPooling2D((2, 2)),
+        layers.Dropout(0.3),
+        
         # Dense layers
         layers.Flatten(),
-        layers.Dense(128, activation='relu', kernel_regularizer=keras.regularizers.l2(l2_reg)),
+        layers.Dense(256, activation='relu', kernel_regularizer=keras.regularizers.l2(l2_reg)),
         layers.BatchNormalization(),
         layers.Dropout(0.5),
         
@@ -180,10 +187,10 @@ def train_with_fedprox(
             'is_personalized': False
         }
     
-    # Store initial global weights
-    initial_global = [w.copy() for w in global_weights]
-    
-    # Create custom training loop with proximal regularization
+    # Filter global_weights to only include trainable weights
+    # model.weights matches the order of global_weights (which came from get_weights())
+    trainable_indices = [i for i, w in enumerate(model.weights) if w.trainable]
+    initial_global = [global_weights[i].copy() for i in trainable_indices]
     optimizer = keras.optimizers.Adam(learning_rate=learning_rate)
     loss_fn = keras.losses.SparseCategoricalCrossentropy()
     
