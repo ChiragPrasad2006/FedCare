@@ -244,15 +244,18 @@
             </div>
         </section>
 
-<<<<<<< Updated upstream
-        <section class="panel">
+        <section class="panel" style="margin-top: 18px;">
             <div class="muted">Browse</div>
             <h2>View received patient data in detail</h2>
             <p class="muted">Retrieve and browse anonymized patient records received from other hospitals</p>
             <div style="display:flex;gap:10px;align-items:center;margin-top:8px;">
                 <button id="retrieveBtn" class="secondary">📥 Retrieve Patient Data</button>
                 <button id="downloadBtn" class="secondary" disabled>⬇️ Download Retrieved Data</button>
-=======
+            </div>
+            <div id="retrieveMessage" class="message"></div>
+            <div id="dataViewContainer"></div>
+        </section>
+
         <section class="grid" style="grid-template-columns: 1fr; margin-top: 18px;">
             <div class="panel">
                 <div class="muted">Training</div>
@@ -317,10 +320,7 @@
                         </table>
                     </div>
                 </div>
->>>>>>> Stashed changes
             </div>
-            <div id="retrieveMessage" class="message"></div>
-            <div id="dataViewContainer"></div>
         </section>
     </div>
 
@@ -337,18 +337,15 @@
             previewTable: document.getElementById('previewTable'),
             receivedSummary: document.getElementById('receivedSummary'),
             receivedTable: document.getElementById('receivedTable'),
-<<<<<<< Updated upstream
             retrieveBtn: document.getElementById('retrieveBtn'),
             retrieveMessage: document.getElementById('retrieveMessage'),
             dataViewContainer: document.getElementById('dataViewContainer'),
-            downloadBtn: document.getElementById('downloadBtn')
-=======
+            downloadBtn: document.getElementById('downloadBtn'),
             trainingTable: document.getElementById('trainingTable'),
             personalizationTable: document.getElementById('personalizationTable'),
             zeroShotTable: document.getElementById('zeroShotTable'),
             syncTrainBtn: document.getElementById('syncTrainBtn'),
             personalizeBtn: document.getElementById('personalizeBtn')
->>>>>>> Stashed changes
         };
 
         // Holds the last-retrieved batches so they can be downloaded
@@ -484,12 +481,9 @@
                 ['New records on last refresh', data.received?.new_record_count || 0]
             ]);
             renderReceived(data.received?.history || []);
-<<<<<<< Updated upstream
-=======
             renderTraining(data.training || []);
             renderPersonalization(data.personalization_history || []);
             renderZeroShot(data.zero_shot_eval_results || []);
->>>>>>> Stashed changes
         }
 
         document.getElementById('saveBtn').addEventListener('click', async () => {
@@ -530,7 +524,6 @@
             }
         });
 
-<<<<<<< Updated upstream
         document.getElementById('retrieveBtn').addEventListener('click', async () => {
             try {
                 els.retrieveMessage.style.display = 'none';
@@ -586,7 +579,9 @@
                 els.retrieveMessage.style.display = 'block';
                 els.retrieveMessage.textContent = err.message;
                 els.retrieveMessage.style.color = '#b33a2b';
-=======
+            }
+        });
+
         document.getElementById('syncTrainBtn').addEventListener('click', async () => {
             try {
                 els.syncTrainBtn.textContent = 'Training...';
@@ -622,7 +617,6 @@
             } finally {
                 els.personalizeBtn.textContent = 'Personalize Local Model';
                 els.personalizeBtn.disabled = false;
->>>>>>> Stashed changes
             }
         });
 

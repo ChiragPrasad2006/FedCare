@@ -100,8 +100,7 @@ def average_weights(weights_list):
         averaged_weights.append(layer_weights_sum / num_models)
     
     return averaged_weights
-<<<<<<< Updated upstream
-=======
+
 
 
 # ============================================================================
@@ -296,4 +295,4 @@ def personalize_model(
         'epochs': epochs,
         'personalization_type': 'standard_finetune'
     }
->>>>>>> Stashed changes
+
